@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AureoTeX — Editor</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap"
+    rel="stylesheet">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.47.0/min/vs/loader.min.js"></script>
+  <link rel="stylesheet" href="/static/editor/style.css">
+</head>
+
+<body>
+  <div class="top-bar"></div>
+  <header class="header">
+    <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1;">
+      <a href="/app/projects" class="logo">
+        <svg viewBox="0 0 28 28" fill="none" style="width: 20px; height: 20px;">
+          <rect width="28" height="28" fill="#E03030" />
+          <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white" />
+        </svg>
+        Aureo<span>TeX</span>
+      </a>
+      <span class="breadcrumb" style="color: #94a3b8; font-size: 0.85rem; font-weight: 500; user-select: none;">
+        <a href="/app/projects" style="color: #94a3b8; text-decoration: none;">Projetos</a>
+        /
+      </span>
+      <input class="project-title" type="text" value="A carregar..." id="projectTitle" onchange="updateProjectName()">
+    </div>
+    
+  <div class="header-actions" style="display: flex; align-items: center; gap: 0.5rem; margin-left: auto;">
+    <div style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; font-weight: 600; color: #64748b; user-select: none; margin-right: 0.5rem;">
+      <span class="status-dot" id="statusDot" style="width: 8px; height: 8px; background: #16a34a; border-radius: 50%; display: inline-block;"></span>
+      <span id="statusText">Pronto</span>
+    </div>
+
+    <button class="btn btn-ghost" id="giteaPullBtn" onclick="pullGitea()" title="Git Pull (Puxar alterações do Gitea)"
+      style="display: flex; align-items: center; gap: 0.4rem; background: none; border: none; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--black); padding: 0.5rem 0.8rem; border-radius: 6px; transition: background 0.15s ease;">
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" style="color: var(--black);">
+        <polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+      </svg>
+      Pull
+    </button>
+
+    <button class="btn btn-ghost" id="giteaBtn" onclick="publishGitea()" title="Git Push (Enviar alterações ao Gitea)"
+      style="display: flex; align-items: center; gap: 0.4rem; background: none; border: none; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--black); padding: 0.5rem 0.8rem; border-radius: 6px; transition: background 0.15s ease;">
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" style="color: var(--black);">
+        <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+      </svg>
+      Push
+    </button>
+    
+    <button class="btn btn-ghost" onclick="openShareModal()" title="Gerar link de colaboração"
+      style="display: flex; align-items: center; gap: 0.4rem; background: none; border: none; cursor: pointer; font-family: 'Space Grotesk', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--black); padding: 0.5rem 0.8rem; border-radius: 6px; transition: background 0.15s ease;">
+      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5" style="color: var(--black);">
+        <circle cx="18" cy="5" r="3" />
+        <circle cx="6" cy="12" r="3" />
+        <circle cx="18" cy="19" r="3" />
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+      </svg>
+      Partilhar
+    </button>
+  </div>
+  </header>
+
+<div class="toolbar">
+  <div class="toolbar-group">
+    <button class="tbtn active" id="sidebarToggleBtn" title="Mostrar/Ocultar Ficheiros (Ctrl/Cmd+B)" onclick="toggleSidebar()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <rect x="3" y="3" width="18" height="18" rx="1"/><line x1="9" y1="3" x2="9" y2="21"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Desfazer (Ctrl+Z)" onclick="editor.undo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><polyline points="3 3 3 8 8 8"/></svg>
+    </button>
+    <button class="tbtn" title="Refazer (Ctrl+Y)" onclick="editor.redo()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12a9 9 0 1 1-9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><polyline points="21 3 21 8 16 8"/></svg>
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Negrito \textbf" onclick="wrapCmd('\\textbf{','}')"><b>B</b></button>
+    <button class="tbtn" title="Itálico \textit" onclick="wrapCmd('\\textit{','}')"><i>I</i></button>
+    <button class="tbtn" title="Sublinhado \underline" onclick="wrapCmd('\\underline{','}')"><u>U</u></button>
+    <button class="tbtn" title="Código inline \texttt" onclick="wrapCmd('\\texttt{','}')">
+      <svg viewBox="0 0 24 24"><polyline points="16,18 22,12 16,6" /><polyline points="8,6 2,12 8,18" /></svg>
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Secção \section" onclick="insertSnippet('\\section{Título}')">§1</button>
+    <button class="tbtn" title="Subsecção \subsection" onclick="insertSnippet('\\subsection{Título}')">§2</button>
+    <button class="tbtn" title="Subsubsecção \subsubsection" onclick="insertSnippet('\\subsubsection{Título}')">§3</button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Equação Inline ($...$)" onclick="wrapCmd('$','$')"><b>$</b></button>
+    <button class="tbtn" title="Equação em Bloco" onclick="wrapCmd('\\[','\\]')"><b>∑</b></button>
+    <button class="tbtn" title="Alinhamento align" onclick="insertSnippet('\\begin{align}\n  \n\\end{align}')"><b>≡</b></button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Lista itemize" onclick="insertSnippet('\\begin{itemize}\n  \\item \n\\end{itemize}')">
+      <svg viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" /><circle cx="4" cy="6" r="1" fill="currentColor" /><circle cx="4" cy="12" r="1" fill="currentColor" /><circle cx="4" cy="18" r="1" fill="currentColor" /></svg>
+    </button>
+    <button class="tbtn" title="Lista enumerate" onclick="insertSnippet('\\begin{enumerate}\n  \\item \n\\end{enumerate}')">
+      <svg viewBox="0 0 24 24"><line x1="9" y1="6" x2="20" y2="6" /><line x1="9" y1="12" x2="20" y2="12" /><line x1="9" y1="18" x2="20" y2="18" /><line x1="4" y1="9" x2="4" y2="6" /><line x1="6" y1="6" x2="4" y2="6" /></svg>
+    </button>
+    <button class="tbtn" title="Tabela" onclick="insertTable()">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="3" y1="15" x2="21" y2="15" /><line x1="12" y1="3" x2="12" y2="21" /></svg>
+    </button>
+    <button class="tbtn" title="Figura \includegraphics" onclick="insertSnippet('\\begin{figure}[h]\n  \\centering\n  \\includegraphics[width=0.8\\linewidth]{figura}\n  \\caption{Legenda}\n  \\label{fig:label}\n\\end{figure}')">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" /><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" /><polyline points="21,15 16,10 5,21" /></svg>
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Comentário (%)" onclick="toggleComment()">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+    </button>
+    <button class="tbtn" title="Pesquisar (Ctrl+F)" onclick="findInEditor()">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" /></svg>
+    </button>
+    <button class="tbtn" title="Definir como Principal (★)" onclick="setMainFile()">
+      <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>
+    </button>
+    <button class="tbtn" title="Referências Bibliográficas" onclick="openRefsModal()">
+      <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+    </button>
+  </div>
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group" id="viewModeGroup">
+    <button class="tbtn active" title="Código e PDF" onclick="setViewMode('split', this)">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" /><line x1="12" y1="3" x2="12" y2="21" /></svg>
+    </button>
+    <button class="tbtn" title="Só Código" onclick="setViewMode('code', this)">
+      <svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" /></svg>
+    </button>
+    <button class="tbtn" title="Só PDF" onclick="setViewMode('pdf', this)">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /></svg>
+    </button>
+  </div>
+
+
+  <div class="toolbar-sep"></div>
+
+  <div class="toolbar-group">
+    <button class="tbtn" title="Descarregar Projeto como ZIP" onclick="downloadZip()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="21 8 21 21 3 21 3 8"/>
+        <rect x="1" y="3" width="22" height="5"/>
+        <line x1="10" y1="12" x2="14" y2="12"/>
+      </svg>
+    </button>
+    
+  </div>
+
+  <div style="margin-left:auto; display:flex; align-items:center; gap:0.75rem;">
+    <span style="font-size:0.7rem; font-weight:700; color:#888; letter-spacing:0.07em; text-transform:uppercase; user-select:none;">Linha</span>
+    <span id="lineNum" style="font-size:0.7rem; font-family:'JetBrains Mono',monospace; font-weight:700; user-select:none;">1:1</span>
+    
+    <div class="toolbar-sep"></div>
+    
+    <button class="btn btn-red" onclick="compilePDF()" id="compileBtn" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">
+      <svg viewBox="0 0 24 24" width="11" height="13" style="stroke:white;"><polygon points="5,3 19,12 5,21" /></svg>
+      Compilar
+    </button>
+    <button class="btn btn-black" onclick="downloadPDF()" style="padding: 0.35rem 0.75rem; font-size: 0.75rem;">
+      <svg viewBox="0 0 24 24" width="11" height="13" style="stroke:white;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7,10 12,15 17,10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+      PDF
+    </button>
+  </div>
+</div>
+
+  <div class="editor-layout">
+    <div class="filetree" id="filetree">
+      <div class="filetree-header">
+        <span>Ficheiros</span>
+        <div class="filetree-actions">
+          <button class="btn btn-ghost" title="Nova Pasta" onclick="newFolder()"
+            style="padding:2px 4px;min-width:0;border:2px solid #111;box-shadow:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" stroke="#111" fill="none" stroke-width="2.5">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+              <line x1="12" y1="11" x2="12" y2="17"/>
+              <line x1="9" y1="14" x2="15" y2="14"/>
+            </svg>
+          </button>
+          
+          <button class="btn btn-ghost" title="Novo ficheiro" onclick="newFile()"
+            style="padding:2px 4px;min-width:0;border:2px solid #111;box-shadow:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" stroke="#111" fill="none" stroke-width="3">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+          
+          <button class="btn btn-ghost" title="Fazer Upload (Imagens, etc)"
+            onclick="document.getElementById('fileUploadInput').click()"
+            style="padding:2px 4px;min-width:0;border:2px solid #111;box-shadow:none">
+            <svg width="13" height="13" viewBox="0 0 24 24" stroke="#111" fill="none" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17,8 12,3 7,8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          </button>
+          <input type="file" id="fileUploadInput" style="display: none;" onchange="handleFileUpload(event)" multiple>
+        </div>
+      </div>
+      <div class="filetree-body" id="filetreeBody">
+        <div class="ftree-folder">
+          <svg width="12" height="12" viewBox="0 0 24 24" stroke="#999" fill="none" stroke-width="2.5">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+          A carregar...
+        </div>
+      </div>
+    </div>
+
+    <div class="resizer" id="resizer" title="Arrastar para redimensionar"></div>
+
+    <div class="editor-pane" id="editorPane">
+      <div class="editor-tabs" id="editorTabs"></div>
+      <div class="editor-wrap">
+        <div id="monaco-container" style="width:100%;height:100%;"></div>
+        <div id="imagePreview"
+          style="display:none; width:100%; height:100%; background:#f5f5f5; align-items:center; justify-content:center; overflow:auto;">
+          <div style="text-align:center; padding:2rem;">
+            <img id="previewImg" src=""
+              style="max-width:95%; max-height:95%; border:3px solid #111; box-shadow:var(--shadow); background:white;">
+            <p id="imageInfo" style="margin-top:1rem; font-weight:700; font-size:0.8rem; color:#666;"></p>
+          </div>
+        </div>
+      </div>
+      <div class="compile-bar">
+        <span class="log-box" id="logBox" style="cursor:pointer;" onclick="toggleErrorPanel()" title="Clica para ver os erros">Pronto para compilar.</span>
+      </div>
+      <div id="errorPanel"
+        style="display:none; border-top:3px solid #E03030; background:#fff; max-height:220px; overflow-y:auto; flex-shrink:0;">
+        <div
+          style="display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0.8rem;background:#E03030;color:#fff;">
+          <span style="font-weight:700;font-size:0.8rem;letter-spacing:0.05em;">
+            ERROS DE COMPILAÇÃO
+            <span id="errorCount"
+              style="background:rgba(255,255,255,0.25);padding:1px 7px;border-radius:10px;margin-left:6px;font-size:0.75rem;">0</span>
+          </span>
+          <div style="display:flex;gap:0.5rem;align-items:center;">
+            <button onclick="toggleRawLog()" id="rawLogBtn"
+              style="background:rgba(255,255,255,0.15);border:1.5px solid rgba(255,255,255,0.4);color:#fff;font-family:'Space Grotesk',sans-serif;font-size:0.7rem;font-weight:700;padding:2px 8px;cursor:pointer;border-radius:2px;">
+              Log Completo
+            </button>
+            <button onclick="closeErrorPanel()"
+              style="background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;line-height:1;padding:0 4px;">×</button>
+          </div>
+        </div>
+
+        <div id="errorList" style="padding:0.4rem 0;"></div>
+
+        <div id="rawLogPanel" style="display:none;padding:0.6rem 0.8rem;background:#1a1a1a;">
+          <pre id="rawLogContent"
+            style="margin:0;font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:#d4d4d4;white-space:pre-wrap;word-break:break-all;"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="resizer" id="previewResizer" title="Arrastar para redimensionar"></div>
+
+    <div class="preview-pane" id="previewPane">
+      <div class="preview-header">
+        <span>Pré-visualização PDF</span>
+        
+        <div class="pdf-toolbar-controls">
+          <div class="pdf-control-group">
+            <button class="pdf-control-btn" title="Página Anterior">
+              <svg viewBox="0 0 24 24" width="12" height="12"><polyline points="18 15 12 9 6 15"/></svg>
+            </button>
+            <button class="pdf-control-btn" title="Próxima Página">
+              <svg viewBox="0 0 24 24" width="12" height="12"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div class="pdf-page-indicator">
+              <span>1</span> <span class="page-sep">/</span> <span>4</span>
+            </div>
+          </div>
+          
+          <div class="pdf-control-sep"></div>
+          
+          <div class="pdf-control-group">
+            <button class="pdf-control-btn" title="Diminuir Zoom">
+              <svg viewBox="0 0 24 24" width="12" height="12"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button class="pdf-control-btn" title="Aumentar Zoom">
+              <svg viewBox="0 0 24 24" width="12" height="12"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <span class="zoom-percent">122%</span>
+          </div>
+        </div>
+      </div>
+      <div class="preview-body" id="previewBody" style="padding: 0; overflow: hidden; background: #525659;">
+        <iframe id="pdfPreviewIframe" style="width: 100%; height: 100%; border: none;" src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
+  <div id="shareModal" class="modal" style="display:none;">
+    <div class="modal-content">
+      <h3>Partilhar Projeto</h3>
+      <p>Copia o link abaixo e envia a quem quiseres. Qualquer utilizador autenticado que abra este link passará a ter
+        acesso como colaborador.</p>
+      <input type="text" id="shareLinkInput" readonly>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeShareModal()">Cancelar</button>
+        <button class="btn btn-black" onclick="copyShareLink()">Copiar Link</button>
+      </div>
+    </div>
+  </div>
+
+
+<div id="refsModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border:3px solid #111;box-shadow:8px 8px 0 #111;width:750px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;">
+
+    <div style="padding:0.8rem 1.2rem;border-bottom:3px solid #111;display:flex;align-items:center;justify-content:space-between;background:#111;">
+      <span style="font-weight:900;font-size:1rem;color:#fff;">📚 Referências Bibliográficas</span>
+      <button onclick="closeRefsModal()" style="background:none;border:none;color:#fff;font-size:1.4rem;cursor:pointer;line-height:1;">×</button>
+    </div>
+
+    <div style="display:flex;border-bottom:2px solid #eee;background:#fafafa;">
+      <button class="ref-tab active" onclick="switchRefTab('search', this)" style="padding:0.6rem 1.2rem;border:none;background:none;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;border-bottom:3px solid #E03030;color:#E03030;">
+        🔍 Pesquisar
+      </button>
+      <button class="ref-tab" onclick="switchRefTab('doi', this)" style="padding:0.6rem 1.2rem;border:none;background:none;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;border-bottom:3px solid transparent;color:#888;">
+        DOI
+      </button>
+      <button class="ref-tab" onclick="switchRefTab('zotero', this)" style="padding:0.6rem 1.2rem;border:none;background:none;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;border-bottom:3px solid transparent;color:#888;">
+        Zotero
+      </button>
+      <button class="ref-tab" onclick="switchRefTab('manual', this)" style="padding:0.6rem 1.2rem;border:none;background:none;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:0.85rem;cursor:pointer;border-bottom:3px solid transparent;color:#888;">
+        Manual
+      </button>
+    </div>
+
+    <div id="refTab-search" style="flex:1;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:0.7rem 1rem;border-bottom:1px solid #eee;display:flex;gap:0.5rem;">
+        <input id="refSearchInput" type="text" placeholder="Título, autor, palavras-chave..."
+          style="flex:1;padding:0.4rem 0.7rem;border:2px solid #111;font-family:'Space Grotesk',sans-serif;font-size:0.85rem;"
+          onkeydown="if(event.key==='Enter') searchRefs()">
+        <select id="refSearchSource" style="padding:0.4rem;border:2px solid #111;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:0.8rem;">
+          <option value="crossref">CrossRef</option>
+          <option value="openalex">OpenAlex</option>
+        </select>
+        <button class="btn btn-red" onclick="searchRefs()" style="padding:0.4rem 0.9rem;">Pesquisar</button>
+      </div>
+      <div id="refSearchResults" style="flex:1;overflow-y:auto;padding:0.4rem 0;">
+        <div style="text-align:center;padding:3rem;color:#aaa;font-size:0.85rem;">
+          Pesquisa por título, autor ou palavras-chave.<br>Sem conta necessária.
+        </div>
+      </div>
+    </div>
+
+    <div id="refTab-doi" style="display:none;flex-direction:column;padding:1.5rem;">
+      <label style="font-weight:700;font-size:0.85rem;margin-bottom:0.5rem;">Introduz o DOI:</label>
+      <div style="display:flex;gap:0.5rem;margin-bottom:1rem;">
+        <input id="doiInput" type="text" placeholder="ex: 10.1038/s41586-021-03819-2"
+          style="flex:1;padding:0.4rem 0.7rem;border:2px solid #111;font-family:'JetBrains Mono',monospace;font-size:0.85rem;"
+          onkeydown="if(event.key==='Enter') resolveDoi()">
+        <button class="btn btn-red" onclick="resolveDoi()" style="padding:0.4rem 0.9rem;">Resolver</button>
+      </div>
+      <div id="doiResult" style="background:#f5f5f5;border:2px solid #eee;padding:1rem;min-height:80px;font-family:'JetBrains Mono',monospace;font-size:0.78rem;white-space:pre-wrap;"></div>
+      <button id="doiAddBtn" onclick="addDoiToBib()" style="display:none;margin-top:0.8rem;" class="btn btn-red">
+        Adicionar ao refs.bib →
+      </button>
+    </div>
+
+    <div id="refTab-zotero" style="display:none;flex-direction:column;overflow:hidden;flex:1;">
+      <div id="zoteroNotConnected" style="padding:2rem;text-align:center;">
+        <p style="font-weight:700;font-size:1rem;margin-bottom:0.5rem;">Conecta o teu Zotero</p>
+        <p style="color:#666;font-size:0.82rem;margin-bottom:1.5rem;line-height:1.6;">
+          O Zotero é gratuito. Precisas do teu <strong>User ID</strong> e de uma <strong>API Key</strong>.<br>
+          Vai a <a href="https://www.zotero.org/settings/keys" target="_blank" style="color:#E03030;">zotero.org/settings/keys</a> para criar a chave.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:0.6rem;max-width:340px;margin:0 auto;text-align:left;">
+          <label style="font-weight:700;font-size:0.82rem;">User ID <span style="font-weight:400;color:#888;">(número em zotero.org/settings/keys)</span></label>
+          <input id="zoteroUserId" type="text" placeholder="ex: 1234567"
+            style="padding:0.4rem 0.7rem;border:2px solid #111;font-family:'JetBrains Mono',monospace;font-size:0.85rem;">
+          <label style="font-weight:700;font-size:0.82rem;margin-top:0.3rem;">API Key</label>
+          <input id="zoteroApiKey" type="password" placeholder="ex: ABCDEFGHIJKLMNOPabcdefg"
+            style="padding:0.4rem 0.7rem;border:2px solid #111;font-family:'JetBrains Mono',monospace;font-size:0.85rem;">
+          <button class="btn btn-red" onclick="connectZotero()" style="margin-top:0.5rem;">
+            Conectar Zotero →
+          </button>
+        </div>
+      </div>
+      <div id="zoteroConnected" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+        <div style="padding:0.6rem 1rem;border-bottom:1px solid #eee;display:flex;gap:0.5rem;align-items:center;">
+          <input type="text" placeholder="Filtrar biblioteca..." id="zoteroFilter"
+            oninput="filterZoteroRefs()"
+            style="flex:1;padding:0.35rem 0.7rem;border:2px solid #111;font-family:'Space Grotesk',sans-serif;font-size:0.82rem;">
+          <button class="btn btn-ghost" onclick="loadZoteroRefs()" style="border:2px solid #111;padding:0.35rem 0.7rem;font-size:0.8rem;">↻ Atualizar</button>
+        </div>
+        <div id="zoteroRefList" style="flex:1;overflow-y:auto;padding:0.4rem 0;"></div>
+      </div>
+    </div>
+
+    <div id="refTab-manual" style="display:none;flex-direction:column;padding:1rem;gap:0.6rem;overflow-y:auto;">
+      <p style="font-size:0.82rem;color:#666;">Cola ou escreve diretamente uma entrada BibTeX:</p>
+      <textarea id="manualBibInput" rows="10" placeholder="@article{chave,
+  author  = {Apelido, Nome},
+  title   = {{Título do Artigo}},
+  journal = {Nome da Revista},
+  year    = {2024},
+  volume  = {1},
+  pages   = {1--10},
+}"
+        style="padding:0.6rem;border:2px solid #111;font-family:'JetBrains Mono',monospace;font-size:0.8rem;resize:vertical;"></textarea>
+      <button class="btn btn-red" onclick="addManualBib()" style="align-self:flex-start;padding:0.5rem 1rem;">
+        Adicionar ao refs.bib →
+      </button>
+    </div>
+
+    <div style="padding:0.6rem 1rem;border-top:2px solid #eee;display:flex;align-items:center;justify-content:space-between;background:#fafafa;">
+      <span id="refsSelectedInfo" style="font-size:0.8rem;color:#888;font-weight:600;">0 selecionadas</span>
+      <button id="refsExportBtn" class="btn btn-red" onclick="exportSelectedRefs()"
+        style="padding:0.4rem 0.9rem;font-size:0.82rem;" disabled>
+        Adicionar Selecionadas ao refs.bib →
+      </button>
+    </div>
+
+  </div>
+</div>
+
+
+<script src="/static/editor/collab.js?v=6"></script>
+<script src="/static/editor/state.js"></script>
+<script src="/static/editor/layout.js?v=1"></script>
+<script src="/static/editor/files.js?v=8"></script>
+<script src="/static/editor/novea.js?v=2"></script>
+<script src="/static/editor/editor.js"></script>
+<script src="/static/editor/compile.js?v=3"></script>
+<script src="/static/editor/share.js"></script>
+<script src="/static/editor/references.js"></script>
+<script src="/static/editor/init.js"></script>
+
+
+
+
+</body>
+
+</html>

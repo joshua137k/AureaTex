@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AureoTeX — Projetos</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/projects/style.css">
+
+</head>
+<body>
+<div class="top-bar"></div>
+<header class="header">
+  <a href="/app/projects" class="logo">
+    <svg width="24" height="24" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" fill="#E03030"/>
+      <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/>
+    </svg>
+    Aureo<span>TeX</span>
+  </a>
+
+  <div class="header-actions">
+    <button class="btn btn-red" onclick="openNewModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+      Novo Projeto
+    </button>
+  </div>
+</header>
+
+<div class="layout">
+<nav class="sidebar">
+  <div style="flex: 1;">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Navegação</div>
+      <a class="nav-item active" href="#" onclick="showSection('mine', this)">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Os meus Projetos
+      </a>
+      <a class="nav-item" href="#" onclick="showSection('shared', this)">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Partilhados comigo
+      </a>
+      <a class="nav-item" href="#" onclick="alert('A funcionalidade Lixo (Recuperação de Projetos Apagados) será implementada em breve!')" style="color: var(--text-muted);">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>
+        Lixo (Em breve)
+      </a>
+    </div>
+    
+    <div class="sidebar-divider"></div>
+    
+    <div class="sidebar-section">
+      <div class="sidebar-label">Integrações</div>
+      <a class="nav-item" href="#" onclick="alert('As referências podem ser configuradas no painel do Zotero dentro do editor.')">
+        <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Zotero & refs.bib
+      </a>
+    </div>
+  </div>
+
+  <div style="position: relative;">
+    <div class="profile-dropdown" id="profileDropdown" style="display: none;">
+      <div class="dropdown-header">Opções da Conta</div>
+      <button class="dropdown-item" onclick="openSettingsModal()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Definições
+      </button>
+      <button class="dropdown-item logout" onclick="logout(event)">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sair / Logout
+      </button>
+    </div>
+
+    <div class="sidebar-profile" onclick="toggleProfileDropdown(event)" style="cursor: pointer;">
+      <div class="profile-avatar" id="profileAvatar">AL</div>
+      <div class="profile-info" style="flex: 1;">
+        <div class="profile-name" id="profileName">Carregando...</div>
+        <div class="profile-role">Plano Pessoal</div>
+      </div>
+      <svg viewBox="0 0 24 24" class="profile-arrow" id="profileArrow"><polyline points="18 15 12 9 6 15"/></svg>
+    </div>
+  </div>
+</nav>
+
+  <main class="content">
+  <div class="welcome-container" style="margin-bottom: 1.5rem;">
+    <h1 class="welcome-title" id="welcomeTitle">Bem-vindo de volta!</h1>
+    <p class="welcome-subtitle">Tens <span id="stat-total" style="font-weight: 700;">0</span> projetos ativos.</p>
+  </div>
+
+  <div class="content-toolbar">
+    <div class="search-box">
+      <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" placeholder="Procurar nos meus projetos..." id="searchInput" oninput="filterProjectsLocally()">
+    </div>
+
+    <div class="filter-tabs">
+      <button class="filter-tab active" id="tab-mine" onclick="showSection('mine', this)">Os meus Projetos</button>
+      <button class="filter-tab" id="tab-shared" onclick="showSection('shared', this)">Partilhados</button>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem; margin-left: auto; border-left: 1px solid var(--gray-border); padding-left: 1rem;">
+      <button class="btn btn-white" id="listViewBtn" onclick="toggleView('list')" title="Vista em Lista">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      </button>
+      <button class="btn btn-black" id="gridViewBtn" onclick="toggleView('grid')" title="Vista em Grelha">
+        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" fill="none" stroke-width="2.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="table-actions-bar" id="tableActionsBar" style="display: none; margin-bottom: 1.5rem;">
+    <button class="btn btn-red" onclick="openNewModal()">
+      <svg width="14" height="14" viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
+      Novo Projeto
+    </button>
+  </div>
+
+
+    <div class="projects-grid" id="projectsGrid">
+      <div class="card-new" onclick="openNewModal()">
+        <div class="card-new-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        </div>
+        <span>Novo Projeto em Branco</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="newModal" onclick="closeModal(event)">
+  <div class="modal">
+    <div class="modal-tabs">
+      <button class="modal-tab-btn active" id="tab-template-btn" onclick="switchModalTab('template')">Criar por Template</button>
+      <button class="modal-tab-btn" id="tab-zip-btn" onclick="switchModalTab('zip')">Importar arquivo ZIP</button>
+    </div>
+
+    <div id="modal-content-template">
+      <div class="field">
+        <label>Nome do Projeto</label>
+        <input type="text" id="newProjectName" placeholder="ex: Tese de Mestrado 2026">
+      </div>
+      <div class="field">
+        <label>Selecione um Template</label>
+        <div class="template-grid">
+          <div class="template-item selected" onclick="selectTemplate(this,'blank')"><div class="template-icon">📄</div>Em branco</div>
+          <div class="template-item" onclick="selectTemplate(this,'article')"><div class="template-icon">📰</div>Artigo</div>
+          <div class="template-item" onclick="selectTemplate(this,'thesis')"><div class="template-icon">📚</div>Tese</div>
+          <div class="template-item" onclick="selectTemplate(this,'beamer')"><div class="template-icon">📊</div>Beamer</div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-white" onclick="closeNewModal()">Cancelar</button>
+        <button class="btn btn-red" onclick="createProject()" id="btn-create">Criar Projeto →</button>
+      </div>
+    </div>
+
+    <div id="modal-content-zip" style="display: none;">
+      <div style="border: 2px dashed var(--gray-border); border-radius: var(--radius-sm); padding: 2rem; text-align: center; cursor: pointer; background: var(--gray);" onclick="document.getElementById('zipInput').click()">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" style="margin-bottom: 0.5rem;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <div style="font-weight: 700; font-size: 0.9rem;">Clique aqui para selecionar o arquivo ZIP</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem;">Arquivos suportados: .zip</div>
+      </div>
+      <input type="file" id="zipInput" accept=".zip" style="display:none" onchange="uploadZip(event)">
+      <div class="modal-actions" style="margin-top: 1.5rem;">
+        <button class="btn btn-white" onclick="closeNewModal()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Modal de Definições -->
+<div class="modal-overlay" id="settingsModal" onclick="closeModal(event)">
+  <div class="modal" style="max-width: 450px;">
+    <h2 style="font-size: 1.25rem; font-weight: 900; margin-bottom: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem;">Definições de Conta</h2>
+    
+    <div style="margin-bottom: 2rem;">
+      <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 1rem;">Autenticação Gitea</h3>
+      <div id="giteaStatusBox" style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+        <span id="giteaStatusText" style="font-size: 0.85rem; font-weight: 600;">A carregar...</span>
+        <button id="btnLinkGitea" class="btn btn-black" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="linkGitea()">Vincular Gitea</button>
+      </div>
+    </div>
+
+    <div>
+      <h3 id="passwordSectionTitle" style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 1rem;">Alterar Password</h3>
+      
+      <div id="pwError" style="display:none; color: white; background: var(--red); padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;"></div>
+      <div id="pwSuccess" style="display:none; color: white; background: #16A34A; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;"></div>
+
+      <div class="field" id="oldPasswordField">
+        <label>Password Atual</label>
+        <input type="password" id="oldPassword" placeholder="••••••••">
+      </div>
+      <div class="field">
+        <label>Nova Password</label>
+        <input type="password" id="newPassword" placeholder="Mínimo 6 caracteres">
+      </div>
+      
+      <button class="btn btn-red" id="btnUpdatePw" onclick="updatePassword()" style="width: 100%;">Atualizar Password</button>
+    </div>
+    
+    <div class="modal-actions" style="margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem;">
+      <button class="btn btn-white" style="width: 100%; text-align: center;" onclick="closeSettingsModal()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.has('token')) {
+  localStorage.setItem('Joshuatex_token', urlParams.get('token'));
+  window.history.replaceState({}, document.title, window.location.pathname);
+}
+
+const token = localStorage.getItem('Joshuatex_token');
+if (!token) window.location.href = '/';
+
+function logout(e) {
+  if (e) e.preventDefault();
+  localStorage.removeItem('Joshuatex_token');
+  window.location.href = '/';
+}
+
+let projects = [];
+let sharedProjects = [];
+let filtered = [];
+let selectedTemplate = 'blank';
+let currentSection = 'mine';
+const COLORS = ['', 'blue', 'green', 'amber'];
+
+let currentUser = null;
+
+async function loadUser() {
+  try {
+    const res = await fetch('/api/me', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Sessão expirada');
+    
+    currentUser = await res.json();
+    const name = currentUser.display_name || currentUser.username;
+    
+    document.getElementById('profileAvatar').textContent = name.substring(0, 2).toUpperCase();
+    document.getElementById('profileName').textContent = name;
+    document.getElementById('welcomeTitle').textContent = `Bem-vindo de volta, ${name}.`;
+
+  } catch (err) {
+    logout();
+  }
+}
+
+function switchModalTab(tabType) {
+  const templateTabBtn = document.getElementById('tab-template-btn');
+  const zipTabBtn = document.getElementById('tab-zip-btn');
+  const templateContent = document.getElementById('modal-content-template');
+  const zipContent = document.getElementById('modal-content-zip');
+
+  if (tabType === 'template') {
+    templateTabBtn.classList.add('active');
+    zipTabBtn.classList.remove('active');
+    templateContent.style.display = 'block';
+    zipContent.style.display = 'none';
+  } else {
+    zipTabBtn.classList.add('active');
+    templateTabBtn.classList.remove('active');
+    zipContent.style.display = 'block';
+    templateContent.style.display = 'none';
+  }
+}
+
+async function loadProjects() {
+  try {
+    const res = await fetch('/api/projects', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Erro ao carregar projetos');
+    projects = await res.json();
+    filtered = [...projects];
+    renderProjects();
+  } catch (err) {
+    alert('Erro ao carregar projetos.');
+  }
+}
+
+async function loadSharedProjects() {
+  try {
+    const res = await fetch('/api/shared', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error('Erro ao carregar projetos partilhados');
+    sharedProjects = await res.json();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+function showSection(section, el) {
+  currentSection = section;
+  document.querySelectorAll('.sidebar .nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+
+  if (section === 'mine') {
+    document.getElementById('tab-mine').classList.add('active');
+    const sidebarLink = document.querySelector('.sidebar a[onclick*="mine"]');
+    if (sidebarLink) sidebarLink.classList.add('active');
+
+    const newCard = document.getElementById('projectsGrid').querySelector('.card-new');
+    if (newCard) newCard.style.display = '';
+    filtered = [...projects];
+    renderProjects();
+  } else if (section === 'shared') {
+    document.getElementById('tab-shared').classList.add('active');
+    const sidebarLink = document.querySelector('.sidebar a[onclick*="shared"]');
+    if (sidebarLink) sidebarLink.classList.add('active');
+
+    const newCard = document.getElementById('projectsGrid').querySelector('.card-new');
+    if (newCard) newCard.style.display = 'none';
+    renderSharedProjects();
+  }
+}
+
+function formatDate(dateString) {
+  return new Date(dateString).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function renderProjects() {
+  const grid = document.getElementById('projectsGrid');
+  const newCard = grid.querySelector('.card-new');
+  grid.innerHTML = '';
+  if (newCard) grid.appendChild(newCard);
+
+  const isList = grid.classList.contains('view-list');
+  
+  if (isList) {
+    const header = document.createElement('div');
+    header.className = 'table-header';
+    header.innerHTML = `
+      <div class="th-title">Nome do Projeto</div>
+      <div class="th-meta">Última Modificação</div>
+      <div class="th-actions">Ações</div>
+    `;
+    grid.appendChild(header);
+  }
+
+  filtered.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => window.location.href = `/app/editor?id=${p.id}`;
+    card.innerHTML = `
+      <div class="card-preview">
+        <div class="mini-paper">
+          <div class="mini-line header"></div>
+          <div class="mini-line body"></div>
+          <div class="mini-line body"></div>
+          <div class="mini-line body short"></div>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="card-title">${p.name}</div>
+        <div class="card-meta">
+          <svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+          ${formatDate(p.updated_at)}
+        </div>
+      </div>
+      <div class="card-actions">
+        <a href="/app/editor?id=${p.id}" class="btn-edit" onclick="event.stopPropagation()">
+          <svg viewBox="0 0 24 24" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Editar
+        </a>
+        <button class="btn-delete" title="Apagar" onclick="event.stopPropagation(); deleteProject(${p.id})">
+          <svg viewBox="0 0 24 24" width="13" height="13"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById('stat-total').textContent = filtered.length;
+}
+
+function renderSharedProjects() {
+  const grid = document.getElementById('projectsGrid');
+  grid.innerHTML = '';
+
+  if (sharedProjects.length === 0) {
+    grid.innerHTML = `
+      <div style="grid-column:1/-1; text-align:center; padding:4rem 2rem; color:#888;">
+        <svg width="48" height="48" viewBox="0 0 24 24" stroke="#ccc" fill="none" stroke-width="1.5" style="margin-bottom:1rem"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <p style="font-weight:700;font-size:1rem;margin-bottom:0.5rem">Nenhum projeto partilhado</p>
+        <p style="font-size:0.85rem">Quando alguém te convidar para colaborar, os projetos aparecem aqui.</p>
+      </div>
+    `;
+    document.getElementById('stat-total').textContent = '0';
+    return;
+  }
+
+  sharedProjects.forEach(p => {
+    const color = COLORS[p.id % COLORS.length];
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.onclick = () => window.location.href = `/app/editor?id=${p.id}`;
+
+    const roleBadge = p.role === 'viewer'
+      ? `<span style="font-size:0.7rem;font-weight:700;background:#f0f0f0;border:1.5px solid #ddd;padding:1px 7px;border-radius:3px;color:#666">Leitor</span>`
+      : `<span style="font-size:0.7rem;font-weight:700;background:#FFE8E8;border:1.5px solid #E03030;padding:1px 7px;border-radius:3px;color:#E03030">Editor</span>`;
+
+    card.innerHTML = `
+      <div class="card-accent ${color}"></div>
+      <div class="card-body">
+        <div class="card-title" style="display:flex;align-items:center;gap:0.5rem">
+          ${p.name} ${roleBadge}
+        </div>
+        <div class="card-meta">
+          <span>
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            ${p.owner_name || p.owner_username}
+          </span>
+          <span>
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
+            ${formatDate(p.updated_at)}
+          </span>
+        </div>
+      </div>
+      <div class="card-actions">
+        <a href="/app/editor?id=${p.id}" onclick="event.stopPropagation()">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+          Abrir
+        </a>
+        <button class="icon-btn" title="Sair do projeto" onclick="event.stopPropagation(); leaveProject(${p.id})"
+          style="color:#E03030" title="Sair deste projeto">
+          <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById('stat-total').textContent = sharedProjects.length;
+}
+
+async function leaveProject(id) {
+  if (!confirm('Tens a certeza que queres sair deste projeto? Perdes o acesso imediatamente.')) return;
+  try {
+    const res = await fetch(`/api/shared/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Erro ao sair do projeto');
+    sharedProjects = sharedProjects.filter(p => p.id !== id);
+    renderSharedProjects();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+async function createProject() {
+  const name = document.getElementById('newProjectName').value.trim();
+  if (!name) { alert('Dá um nome ao projeto!'); return; }
+  const btn = document.getElementById('btn-create');
+  btn.disabled = true;
+  btn.textContent = 'A criar...';
+  try {
+    const res = await fetch('/api/projects', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ name, template: selectedTemplate, is_public: false })
+    });
+    if (!res.ok) throw new Error('Erro ao criar projeto');
+    const newProject = await res.json();
+    closeNewModal();
+    window.location.href = `/app/editor?id=${newProject.id}`;
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = 'Criar Projeto →';
+  }
+}
+
+async function deleteProject(id) {
+  if (!confirm('Tens a certeza absoluta que queres apagar este projeto?')) return;
+  try {
+    const res = await fetch(`/api/projects/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error('Erro ao apagar projeto');
+    projects = projects.filter(p => p.id !== id);
+    filtered = filtered.filter(p => p.id !== id);
+    renderProjects();
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
+function filterProjectsLocally() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  if (currentSection === 'mine') {
+    filtered = projects.filter(p => p.name.toLowerCase().includes(q));
+    renderProjects();
+  } else {
+    const filteredShared = sharedProjects.filter(p => p.name.toLowerCase().includes(q));
+    const original = sharedProjects;
+    sharedProjects = filteredShared;
+    renderSharedProjects();
+    sharedProjects = original;
+  }
+}
+
+function openNewModal() {
+  document.getElementById('newModal').classList.add('open');
+  setTimeout(() => document.getElementById('newProjectName').focus(), 100);
+}
+
+function closeNewModal() {
+  document.getElementById('newModal').classList.remove('open');
+}
+
+function selectTemplate(el, name) {
+  document.querySelectorAll('.template-item').forEach(t => t.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedTemplate = name;
+}
+
+function toggleView(v) {
+  const grid = document.getElementById('projectsGrid');
+  const listBtn = document.getElementById('listViewBtn');
+  const gridBtn = document.getElementById('gridViewBtn');
+  const actionsBar = document.getElementById('tableActionsBar');
+
+  if (v === 'list') {
+    grid.classList.add('view-list');
+    listBtn.className = 'btn btn-black'; 
+    gridBtn.className = 'btn btn-white'; 
+    if (actionsBar) actionsBar.style.display = 'flex';
+  } else {
+    grid.classList.remove('view-list');
+    gridBtn.className = 'btn btn-black'; 
+    listBtn.className = 'btn btn-white'; 
+    if (actionsBar) actionsBar.style.display = 'none';
+  }
+
+  if (currentSection === 'mine') {
+    renderProjects();
+  } else {
+    renderSharedProjects();
+  }
+}
+
+async function uploadZip(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const defaultName = file.name.replace(/\.[^/.]+$/, "");
+  const projectName = prompt("Dá um nome a este projeto importado:", defaultName);
+  if (!projectName) { event.target.value = ''; return; }
+
+  document.getElementById('stat-total').textContent = 'A importar...';
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("name", projectName);
+
+  try {
+    const res = await fetch('/api/projects/upload-zip', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` },
+      body: formData
+    });
+    if (!res.ok) throw new Error('Erro ao fazer upload do ZIP');
+    const newProject = await res.json();
+    window.location.href = `/app/editor?id=${newProject.id}`;
+  } catch (err) {
+    alert(err.message);
+    loadProjects();
+  }
+  event.target.value = '';
+}
+
+function toggleProfileDropdown(event) {
+  event.stopPropagation(); 
+  const dropdown = document.getElementById('profileDropdown');
+  const arrow = document.getElementById('profileArrow');
+  const isOpen = dropdown.style.display === 'flex';
+
+  if (isOpen) {
+    dropdown.style.display = 'none';
+    arrow.style.transform = '';
+  } else {
+    dropdown.style.display = 'flex';
+    arrow.style.transform = 'rotate(180deg)';
+  }
+}
+
+
+function openSettingsModal() {
+  document.getElementById('settingsModal').classList.add('open');
+  
+  document.getElementById('pwError').style.display = 'none';
+  document.getElementById('pwSuccess').style.display = 'none';
+
+  const giteaStatus = document.getElementById('giteaStatusText');
+  const btnLink = document.getElementById('btnLinkGitea');
+  if (currentUser && currentUser.has_gitea) {
+    giteaStatus.textContent = 'Conta vinculada ao Gitea ✓';
+    giteaStatus.style.color = '#16A34A';
+    btnLink.style.display = 'none';
+  } else {
+    giteaStatus.textContent = 'Conta local (Não vinculada)';
+    giteaStatus.style.color = '#64748b';
+    btnLink.style.display = 'block';
+  }
+
+  const oldPwField = document.getElementById('oldPasswordField');
+  const pwTitle = document.getElementById('passwordSectionTitle');
+  if (currentUser && currentUser.has_password) {
+    oldPwField.style.display = 'block';
+    pwTitle.textContent = 'Alterar Password';
+  } else {
+    oldPwField.style.display = 'none';
+    pwTitle.textContent = 'Definir Password de Acesso Local';
+  }
+}
+
+function closeSettingsModal() {
+  document.getElementById('settingsModal').classList.remove('open');
+  document.getElementById('oldPassword').value = '';
+  document.getElementById('newPassword').value = '';
+}
+
+function linkGitea() {
+  window.location.href = `/api/auth/login?token=${token}`;
+}
+
+async function updatePassword() {
+  const oldPassword = document.getElementById('oldPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const errorBox = document.getElementById('pwError');
+  const successBox = document.getElementById('pwSuccess');
+  const btn = document.getElementById('btnUpdatePw');
+  
+  errorBox.style.display = 'none';
+  successBox.style.display = 'none';
+
+  if (currentUser.has_password && !oldPassword) {
+    errorBox.textContent = 'Por favor insere a password atual.';
+    errorBox.style.display = 'block';
+    return;
+  }
+  if (!newPassword || newPassword.length < 6) {
+    errorBox.textContent = 'A nova password deve ter pelo menos 6 caracteres.';
+    errorBox.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'A atualizar...';
+
+  try {
+    const res = await fetch('/api/users/password', {
+      method: 'PUT',
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json' 
+      },
+      body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+    });
+    
+    const data = await res.json();
+    
+    if (res.ok) {
+      successBox.textContent = data.message;
+      successBox.style.display = 'block';
+      currentUser.has_password = true; 
+      document.getElementById('oldPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      document.getElementById('oldPasswordField').style.display = 'block';
+      document.getElementById('passwordSectionTitle').textContent = 'Alterar Password';
+    } else {
+      errorBox.textContent = data.detail || 'Erro ao atualizar password.';
+      errorBox.style.display = 'block';
+    }
+  } catch (e) {
+    errorBox.textContent = 'Erro de rede ao comunicar com o servidor.';
+    errorBox.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Atualizar Password';
+  }
+}
+
+
+function closeModal(e) {
+  if (e.target === e.currentTarget) {
+    if (e.currentTarget.id === 'newModal') closeNewModal();
+    if (e.currentTarget.id === 'settingsModal') closeSettingsModal();
+  }
+}
+
+document.addEventListener('click', () => {
+  const dropdown = document.getElementById('profileDropdown');
+  const arrow = document.getElementById('profileArrow');
+  if (dropdown) {
+    dropdown.style.display = 'none';
+    if (arrow) arrow.style.transform = '';
+  }
+});
+
+
+loadUser();
+Promise.all([loadProjects(), loadSharedProjects()]);
+</script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+httpx
+aiomysql
+PyJWT
+python-multipart
+gitpython
+websockets
+passlib[bcrypt]
+numpy
+scipy
+Pillow

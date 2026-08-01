@@ -1,0 +1,26 @@
+# Pastas de dados e utilizadores
+projetos/
+joshua/
+!projetos/.keep
+mariadb_data/
+postgres_data/
+gitea_data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# VS Code / Extensão
+.vscode/
+pluginVS/aureatex-sync/node_modules/
+pluginVS/aureatex-sync/out/
+pluginVS/aureatex-sync/*.vsix
+
+# Mac / SO
+.DS_Store

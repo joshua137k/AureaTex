@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:16
+    container_name: gitea-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: gitea
+      POSTGRES_PASSWORD: change_this_password
+      POSTGRES_DB: gitea
+      TZ: Europe/Lisbon
+    volumes:
+      # O caminho absoluto foi alterado para uma pasta relativa
+      - ./postgres_data:/var/lib/postgresql/data
+
+  gitea:
+    image: gitea/gitea:1.22
+    container_name: gitea
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      USER_UID: 1000
+      USER_GID: 1000
+
+      GITEA__database__DB_TYPE: postgres
+      GITEA__database__HOST: db:5432
+      GITEA__database__NAME: gitea
+      GITEA__database__USER: gitea
+      GITEA__database__PASSWD: change_this_password
+      
+      # Alterado para valores de exemplo/localhost
+      GITEA__server__ROOT_URL: http://localhost:3000
+      GITEA__server__SSH_DOMAIN: localhost
+      
+      GITEA__server__START_SSH_SERVER: "true"
+      GITEA__server__SSH_LISTEN_PORT: 2222
+      GITEA__server__SSH_PORT: 2222
+      TZ: Europe/Lisbon
+    ports:
+      - "3000:3000"
+      - "2222:2222"
+    volumes:
+      # O caminho absoluto foi alterado para uma pasta relativa
+      - ./gitea_data:/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro

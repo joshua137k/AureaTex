@@ -1,0 +1,52 @@
+services:
+
+  mariadb:
+    image: mariadb:11
+    container_name: aureatex_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: change_this_root_password
+      MYSQL_DATABASE:      aureatex
+      MYSQL_USER:          aureatex
+      MYSQL_PASSWORD:      change_this_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  aureatex-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aureatex_api
+    restart: always
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "8111:8000"
+    volumes:
+      - ./app:/app
+      - ./projetos:/projetos
+    environment:
+      # -- Gitea OAuth --
+      GITEA_URL:          https://gitea.example.com
+      GITEA_CLIENT_ID:    your_gitea_client_id_here
+      GITEA_CLIENT_SECRET: your_gitea_client_secret_here
+
+      # -- App Settings --
+      APP_URL:            http://localhost:8111
+      JWT_SECRET:         change-this-secret-for-production
+
+      # -- Database --
+      DB_HOST:            mariadb
+      DB_PORT:            3306
+      DB_USER:            aureatex
+      DB_PASSWORD:        change_this_password
+      DB_NAME:            aureatex
+
+volumes:
+  mariadb_data:

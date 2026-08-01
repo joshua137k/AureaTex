@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AureoTeX — Entrar</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/login/style.css">
+</head>
+<body>
+<div class="top-bar"></div>
+<header class="header">
+  <a href="index.html" class="logo">
+    <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <rect width="28" height="28" fill="#E03030"/>
+      <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/>
+    </svg>
+    Aureo<span>TeX</span>
+  </a>
+</header>
+<main class="main">
+  <div class="left-panel">
+    <h1>Escreve<br>em <em>LaTeX.</em><br>Publica.<br>Colabora.</h1>
+    <p>O teu editor LaTeX self-hosted com controlo de versões via Gitea. Nada vai à nuvem de ninguém.</p>
+    <ul class="feature-list">
+      <li>Compilação PDF em tempo real</li>
+      <li>Controlo de versões com Git</li>
+      <li>100% nos teus servidores</li>
+    </ul>
+  </div>
+  <div class="right-panel">
+    <div class="login-box">
+      <h2 id="form-title">Entrar</h2>
+      <p class="subtitle" id="form-subtitle">Acede com a tua conta Gitea ou com as tuas credenciais.</p>
+
+      <a href="/login" class="btn-gitea" id="gitea-btn">
+        <svg class="gitea-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.483 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+        </svg>
+        Entrar com Gitea
+      </a>
+
+      <div class="divider" id="form-divider">ou</div>
+
+      <div id="error-msg" style="display:none; color: var(--white); background: var(--red); padding: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; font-weight: bold; border: 2px solid var(--black);"></div>
+
+      <form id="login-form" class="manual-form" onsubmit="handleManualLogin(event)">
+        <div class="field">
+          <label>Utilizador</label>
+          <input type="text" id="login-username" placeholder="nickname" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••" required>
+        </div>
+        <button type="submit" class="btn-primary" id="btn-login-submit">Entrar →</button>
+        <p class="footer-note" style="margin-top: 1rem;">
+          Não tens conta? <a href="#" onclick="toggleMode(event, 'register')">Criar Conta</a>
+        </p>
+      </form>
+
+      <form id="register-form" class="manual-form" onsubmit="handleRegister(event)" style="display: none;">
+        <div class="field">
+          <label>Utilizador</label>
+          <input type="text" id="reg-username" placeholder="nickname" required>
+        </div>
+        <div class="field">
+          <label>Email</label>
+          <input type="email" id="reg-email" placeholder="nickname@exemplo.pt" required>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6">
+        </div>
+        <button type="submit" class="btn-primary" id="btn-reg-submit">Criar Conta →</button>
+        <p class="footer-note" style="margin-top: 1rem;">
+          Já tens conta? <a href="#" onclick="toggleMode(event, 'login')">Entrar aqui</a>
+        </p>
+      </form>
+
+    </div>
+  </div>
+</main>
+
+<script>
+function toggleMode(e, mode) {
+  e.preventDefault();
+  const loginForm = document.getElementById('login-form');
+  const regForm = document.getElementById('register-form');
+  const title = document.getElementById('form-title');
+  const subtitle = document.getElementById('form-subtitle');
+  const giteaBtn = document.getElementById('gitea-btn');
+  const divider = document.getElementById('form-divider');
+  const errorMsg = document.getElementById('error-msg');
+  
+  errorMsg.style.display = 'none';
+
+  if (mode === 'register') {
+    loginForm.style.display = 'none';
+    regForm.style.display = 'flex';
+    giteaBtn.style.display = 'none';
+    divider.style.display = 'none';
+    title.textContent = 'Criar Conta';
+    subtitle.textContent = 'Regista-te localmente para usar o AureoTeX.';
+  } else {
+    loginForm.style.display = 'flex';
+    regForm.style.display = 'none';
+    giteaBtn.style.display = 'flex';
+    divider.style.display = 'flex';
+    title.textContent = 'Entrar';
+    subtitle.textContent = 'Acede com a tua conta Gitea ou com as tuas credenciais.';
+  }
+}
+
+function showError(msg) {
+  const errorBox = document.getElementById('error-msg');
+  errorBox.textContent = msg;
+  errorBox.style.display = 'block';
+}
+
+async function handleManualLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-login-submit');
+  btn.textContent = 'A entrar...';
+  btn.disabled = true;
+
+  const username = document.getElementById('login-username').value;
+  const password = document.getElementById('login-password').value;
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('Joshuatex_token', data.access_token);
+      window.location.href = '/app/projects';
+    } else {
+      showError(data.detail || 'Erro ao entrar. Verifica os dados.');
+    }
+  } catch (err) {
+    showError('Erro de ligação ao servidor.');
+  } finally {
+    btn.textContent = 'Entrar →';
+    btn.disabled = false;
+  }
+}
+
+async function handleRegister(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-reg-submit');
+  btn.textContent = 'A criar...';
+  btn.disabled = true;
+
+  const username = document.getElementById('reg-username').value;
+  const email = document.getElementById('reg-email').value;
+  const password = document.getElementById('reg-password').value;
+
+  try {
+    const res = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, email, password })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      localStorage.setItem('Joshuatex_token', data.access_token);
+      window.location.href = '/app/projects';
+    } else {
+      showError(data.detail || 'Erro ao criar conta.');
+    }
+  } catch (err) {
+    showError('Erro de ligação ao servidor.');
+  } finally {
+    btn.textContent = 'Criar Conta →';
+    btn.disabled = false;
+  }
+}
+</script>
+</body>
+</html>

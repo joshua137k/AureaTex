@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AureoTeX — Convite</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <style>
+    :root { --red: #E03030; --black: #111111; --white: #FFFFFF; --shadow: 4px 4px 0 #111; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Space Grotesk', sans-serif; background: #f5f5f5; display: flex; align-items: center; justify-content: center; height: 100vh; }
+    .card { background: var(--white); border: 3px solid var(--black); box-shadow: var(--shadow); padding: 2.5rem; max-width: 400px; width: 90%; text-align: center; }
+    .card h1 { font-size: 1.5rem; margin-bottom: 0.5rem; letter-spacing: -0.5px; }
+    .card p { font-size: 0.9rem; color: #555; margin-bottom: 1.5rem; line-height: 1.5; }
+    .project-box { background: #FFE8E8; border: 2px dashed var(--red); padding: 1rem; margin-bottom: 1.5rem; font-weight: 700; color: var(--red); word-break: break-all; }
+    .btn { padding: 0.6rem 1rem; border: 3px solid var(--black); font-family: 'Space Grotesk', sans-serif; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: block; width: 100%; transition: transform 0.1s, box-shadow 0.1s; text-decoration: none; text-align: center; }
+    .btn:hover { transform: translate(2px, 2px); box-shadow: none; }
+    .btn-red { background: var(--red); color: var(--white); }
+  </style>
+</head>
+<body>
+
+  <div class="card" id="inviteCard" style="display:none;">
+    <h1>Convite Colaborativo</h1>
+    <p>Foste convidado(a) para colaborar num projeto do AureoTeX.</p>
+    
+    <div class="project-box">
+      <div id="pName" style="font-size: 1.2rem; margin-bottom: 0.2rem;">A carregar...</div>
+      <div id="pOwner" style="font-size: 0.8rem; font-weight: 500; color: #111;">Dono: ---</div>
+    </div>
+
+    <button class="btn btn-red" onclick="acceptInvite()" id="btnAccept">Aceitar e Entrar no Projeto</button>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const inviteToken = urlParams.get('token');
+    const userToken = localStorage.getItem('Joshuatex_token');
+
+    if (!userToken) {
+      alert("Precisas de ter sessão iniciada para aceitar um convite.");
+      window.location.href = `/`; 
+    }
+
+    window.addEventListener('DOMContentLoaded', async () => {
+      if (!inviteToken) {
+        document.body.innerHTML = "<h2 style='text-align:center;'>Convite Inválido. Link malformado.</h2>";
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/invites/${inviteToken}`);
+        if (!res.ok) throw new Error("Link expirado ou revogado pelo dono.");
+        
+        const data = await res.json();
+        
+        document.getElementById('pName').textContent = data.project_name;
+        document.getElementById('pOwner').textContent = `Dono: ${data.owner_name}`;
+        document.getElementById('inviteCard').style.display = 'block';
+      } catch (err) {
+        document.body.innerHTML = `<div class="card"><h1>Erro</h1><p>${err.message}</p><a href="/app/projects" class="btn btn-red">Ir para Projetos</a></div>`;
+      }
+    });
+
+    async function acceptInvite() {
+      const btn = document.getElementById('btnAccept');
+      btn.textContent = "A aceitar...";
+      btn.disabled = true;
+
+      try {
+        const res = await fetch(`/api/invites/${inviteToken}/accept`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${userToken}` }
+        });
+        
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || "Erro ao aceitar convite.");
+        }
+        
+        const data = await res.json();
+        
+
+        window.location.href = `/app/editor?id=${data.project_id}`;
+      } catch (err) {
+        alert(err.message);
+        btn.textContent = "Aceitar e Entrar no Projeto";
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

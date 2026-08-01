@@ -1,0 +1,62 @@
+{
+  "name": "aureatex-sync",
+  "displayName": "AureaTeX Sync",
+  "description": "Sincronização e Compilação para AureaTeX",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Other"],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aureatex.sync",
+        "title": "AureaTeX: Sincronizar Projeto (Push/Pull)"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "aureatex.sync",
+        "key": "f6",
+        "when": "editorTextFocus || !editorTextFocus"
+      }
+    ],
+    "configuration": {
+      "title": "AureaTeX",
+      "properties": {
+        "aureatex.apiUrl": {
+          "type": "string",
+          "default": "http://100.103.241.42:8111",
+          "description": "O URL do teu servidor AureaTeX"
+        },
+        "aureatex.username": {
+          "type": "string",
+          "default": "",
+          "description": "O teu utilizador do AureaTeX"
+        },
+        "aureatex.password": {
+          "type": "string",
+          "default": "",
+          "description": "A tua password do AureaTeX"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "axios": "^1.6.0",
+    "mime-types": "^2.1.35"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "@types/node": "^18.x",
+    "@types/mime-types": "^2.1.1",
+    "typescript": "^5.0.0"
+  }
+}
