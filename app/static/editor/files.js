@@ -1,4 +1,8 @@
 const openModels = new Map();
+let historyEditor = null;
+let selectedHistoryId = null;
+
+
 
 if (!document.getElementById('ftree-styles')) {
   const s = document.createElement('style');
@@ -17,7 +21,7 @@ async function loadProject() {
     const res = await fetch(`/api/projects/${projectId}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Projeto não encontrado');
+    if (!res.ok) throw new Error('Project not found');
     const p = await res.json();
     document.getElementById('projectTitle').value = p.name;
   } catch (e) {
@@ -26,19 +30,141 @@ async function loadProject() {
   }
 }
 
+
+async function openHistoryModal() {
+  if (activeFile < 0) return;
+  const f = files[activeFile];
+  
+  if (f.binary) {
+    alert("History is not available for images/binary files.");
+    return;
+  }
+  
+  document.getElementById('historyModal').style.display = 'flex';
+  document.getElementById('historyFileName').textContent = f.name;
+  document.getElementById('historyList').innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Searching through time...</div>';
+  document.getElementById('btnRestoreHistory').disabled = true;
+  selectedHistoryId = null;
+  
+  // Create the Preview editor if it doesn't exist yet
+  if (!historyEditor) {
+    historyEditor = monaco.editor.create(document.getElementById('historyMonaco'), {
+      value: '// Choose a version from the sidebar...',
+      language: languageForFile(f.name),
+      theme: 'joshuatex-light',
+      readOnly: true,
+      minimap: { enabled: false },
+      fontFamily: "'JetBrains Mono', monospace",
+    });
+  } else {
+    historyEditor.setValue('// Choose a version from the sidebar...');
+    monaco.editor.setModelLanguage(historyEditor.getModel(), languageForFile(f.name));
+  }
+  
+  try {
+    const res = await fetch(`/api/projects/${projectId}/files/${encodeURIComponent(f.name)}/history`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.detail || 'Error loading history from the server.');
+    }
+    
+    if (!data || data.length === 0) {
+      document.getElementById('historyList').innerHTML = '<div style="padding:1rem;color:#666;font-size:0.85rem;text-align:center;font-weight:bold;">No saved versions for this file yet. Wait for the next autosaves.</div>';
+      return;
+    }
+    
+    document.getElementById('historyList').innerHTML = data.map(h => {
+      const d = new Date(h.saved_at + 'Z');
+      const timeStr = d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+      const dateStr = d.toLocaleDateString('en-US', {day:'2-digit', month:'short'});
+      const name = h.display_name || h.username;
+      
+      return `
+        <div class="history-item" onclick="loadHistoryPreview(${h.id}, this)" style="padding:0.8rem;border-bottom:1px solid #eee;cursor:pointer;border-left:3px solid transparent;transition:all 0.1s;">
+          <div style="font-weight:700;font-size:0.85rem;color:#111;">${dateStr} at ${timeStr}</div>
+          <!-- Note: escapeHtml(name) is used here to prevent XSS -->
+          <div style="font-size:0.75rem;color:#666;margin-top:2px;">By <strong>${escapeHtml(name)}</strong></div>
+        </div>
+      `;
+    }).join('');
+  } catch(err) {
+    document.getElementById('historyList').innerHTML = `<div style="color:red;padding:1rem;">Error: ${err.message}</div>`;
+  }
+}
+
+function closeHistoryModal() {
+  document.getElementById('historyModal').style.display = 'none';
+}
+
+async function loadHistoryPreview(id, element) {
+  document.querySelectorAll('.history-item').forEach(el => {
+    el.style.background = 'transparent';
+    el.style.borderLeftColor = 'transparent';
+  });
+  
+  element.style.background = '#FFE8E8';
+  element.style.borderLeftColor = '#E03030';
+  
+  selectedHistoryId = id;
+  document.getElementById('btnRestoreHistory').disabled = false;
+  historyEditor.setValue('% Loading version from the past...');
+  
+  try {
+    const res = await fetch(`/api/projects/${projectId}/history/${id}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    historyEditor.setValue(data.content || '');
+  } catch(err) {
+    historyEditor.setValue('% Error loading content.');
+  }
+}
+
+async function restoreSelectedHistory() {
+  if (!selectedHistoryId || activeFile < 0) return;
+  const f = files[activeFile];
+  
+  if(!confirm('🚨 WARNING: This will replace the current text of this file with the version shown on screen. Do you really want to go back in time?')) return;
+  
+  const btn = document.getElementById('btnRestoreHistory');
+  btn.disabled = true;
+  btn.textContent = 'Restoring...';
+  
+  try {
+    const res = await fetch(`/api/projects/${projectId}/files/${encodeURIComponent(f.name)}/restore/${selectedHistoryId}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if(!res.ok) throw new Error('Error restoring the version.');
+    
+    closeHistoryModal();
+    alert('Version restored successfully!');
+  } catch(err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Restore this Version';
+  }
+}
+
+
 async function updateProjectName() {
   const newName = document.getElementById('projectTitle').value.trim();
   if (!newName) return;
-  document.getElementById('statusText').textContent = 'A guardar título...';
+  document.getElementById('statusText').textContent = 'Saving title...';
   try {
     await fetch(`/api/projects/${projectId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ name: newName })
     });
-    document.getElementById('statusText').textContent = 'Guardado';
+    document.getElementById('statusText').textContent = 'Saved';
   } catch {
-    document.getElementById('statusText').textContent = 'Erro ao guardar';
+    document.getElementById('statusText').textContent = 'Error saving';
   }
 }
 
@@ -81,7 +207,7 @@ async function getOrCreateModel(filename) {
     }
   }
 
-  document.getElementById('statusText').textContent = 'A carregar...';
+  document.getElementById('statusText').textContent = 'Loading...';
   let content = '';
 
   const wsReady = collab && collab.ws && collab.ws.readyState === WebSocket.OPEN;
@@ -99,7 +225,7 @@ async function getOrCreateModel(filename) {
     }
   }
 
-  document.getElementById('statusText').textContent = 'Pronto';
+  document.getElementById('statusText').textContent = 'Ready';
 
   const model = monaco.editor.createModel(content, languageForFile(filename));
   openModels.set(filename, model);
@@ -149,9 +275,9 @@ async function switchFile(index) {
   editor.setModel(model);
 
   if (collab) {
-    document.getElementById('statusText').textContent = 'A sincronizar...';
+    document.getElementById('statusText').textContent = 'Syncing...';
     await collab.joinFile(f.name);
-    document.getElementById('statusText').textContent = 'Pronto';
+    document.getElementById('statusText').textContent = 'Ready';
   }
 
   if (editor) editor.updateOptions({ readOnly: false });
@@ -177,7 +303,7 @@ function _showBinary(f) {
   } else {
     document.getElementById('previewImg').src = '';
     document.getElementById('imageInfo').textContent =
-      `Ficheiro binário: ${f.name} (Não pode ser pré-visualizado)`;
+      `Binary file: ${f.name} (Cannot be previewed)`;
   }
 }
 
@@ -186,7 +312,7 @@ function scheduleSave() {
   if (collab) return; 
 
   clearTimeout(saveTimeout);
-  document.getElementById('statusText').textContent = 'A guardar...';
+  document.getElementById('statusText').textContent = 'Saving...';
   saveTimeout = setTimeout(saveFile, 1500);
 }
 
@@ -201,7 +327,7 @@ async function saveFile() {
   if (!f || f.binary) return;
   
   if (collab) {
-    document.getElementById('statusText').textContent = 'Guardado';
+    document.getElementById('statusText').textContent = 'Saved';
     return;
   }
 
@@ -212,24 +338,24 @@ async function saveFile() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ content })
     });
-    document.getElementById('statusText').textContent = 'Guardado';
+    document.getElementById('statusText').textContent = 'Saved';
   } catch {
-    document.getElementById('statusText').textContent = 'Erro ao guardar';
+    document.getElementById('statusText').textContent = 'Error saving';
   }
 }
 
 async function newFile(basePath = '', event = null) {
   if (event) event.stopPropagation();
   
-  const defaultName = basePath ? `${basePath}/novo.tex` : 'novo.tex';
-  let name = prompt('Nome do ficheiro (ex: novo.tex, script.nv):', defaultName);
+  const defaultName = basePath ? `${basePath}/new.tex` : 'new.tex';
+  let name = prompt('File name (e.g.: new.tex, script.nv):', defaultName);
   if (!name) return;
   
   name = name.replace(/\/+/g, '/').replace(/^\/+/, '');
   
   const defaultContent = name.endsWith('.m') || name.endsWith('.nv')
-    ? '% novo script\n'
-    : '% Novo ficheiro';
+    ? '% new script\n'
+    : '% New file';
     
   try {
     await fetch(`/api/projects/${projectId}/files/${name}`, {
@@ -244,15 +370,15 @@ async function newFile(basePath = '', event = null) {
     
     await switchFile(files.length - 1);
   } catch {
-    alert('Erro ao criar ficheiro no servidor.');
+    alert('Error creating file on server.');
   }
 }
 
 async function newFolder(basePath = '', event = null) {
   if (event) event.stopPropagation();
   
-  const defaultName = basePath ? `${basePath}/nova_pasta` : 'nova_pasta';
-  let name = prompt('Nome da pasta (ex: imagens, capitulos):', defaultName);
+  const defaultName = basePath ? `${basePath}/new_folder` : 'new_folder';
+  let name = prompt('Folder name (e.g.: images, chapters):', defaultName);
   if (!name) return;
   
   name = name.replace(/\/+/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
@@ -272,24 +398,24 @@ async function newFolder(basePath = '', event = null) {
     
     renderTabs();
     renderFileTree();
-    document.getElementById('statusText').textContent = 'Pasta criada';
+    document.getElementById('statusText').textContent = 'Folder created';
   } catch {
-    alert('Erro ao criar pasta no servidor.');
+    alert('Error creating folder on server.');
   }
 }
 
 async function deleteFolder(folderPath, event) {
   if (event) event.stopPropagation();
-  if (!confirm(`Tens a certeza que queres apagar a pasta '${folderPath}' e TODOS os seus ficheiros?`)) return;
+  if (!confirm(`Are you sure you want to delete the folder '${folderPath}' and ALL its files?`)) return;
 
-  document.getElementById('statusText').textContent = 'A apagar pasta...';
+  document.getElementById('statusText').textContent = 'Deleting folder...';
 
   const filesToDelete = files.filter(f => f.name.startsWith(folderPath + '/'));
 
   for (const f of filesToDelete) {
     if (f.is_main) {
-      alert(`Não podes apagar a pasta porque contém o ficheiro principal (${f.name}).`);
-      document.getElementById('statusText').textContent = 'Cancelado';
+      alert(`You can't delete the folder because it contains the main file (${f.name}).`);
+      document.getElementById('statusText').textContent = 'Cancelled';
       return;
     }
   }
@@ -331,16 +457,16 @@ async function deleteFolder(folderPath, event) {
 
     renderTabs();
     renderFileTree();
-    document.getElementById('statusText').textContent = 'Pasta apagada';
+    document.getElementById('statusText').textContent = 'Folder deleted';
   } catch (err) {
-    alert('Erro ao apagar a pasta.');
+    alert('Error deleting the folder.');
   }
 }
 
 async function handleFileUpload(event) {
   const uploaded = event.target.files;
   if (!uploaded?.length) return;
-  document.getElementById('statusText').textContent = 'A fazer upload...';
+  document.getElementById('statusText').textContent = 'Uploading...';
 
   for (const file of uploaded) {
     const isTextFile = file.name.endsWith('.tex') || file.name.endsWith('.bib') ||
@@ -367,10 +493,10 @@ async function handleFileUpload(event) {
       else files.push({ name: file.name, content, binary: isBinary, is_main: false });
       renderTabs();
       renderFileTree();
-      document.getElementById('statusText').textContent = 'Upload concluído';
+      document.getElementById('statusText').textContent = 'Upload complete';
     } catch {
-      alert('Erro ao enviar ficheiro: ' + file.name);
-      document.getElementById('statusText').textContent = 'Erro';
+      alert('Error uploading file: ' + file.name);
+      document.getElementById('statusText').textContent = 'Error';
     }
   }
   event.target.value = '';
@@ -385,7 +511,7 @@ async function moveOrRenameFile(oldName, newName, reRender = true) {
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || 'Erro ao mover/renomear.');
+      throw new Error(err.detail || 'Error moving/renaming.');
     }
     applyRename(oldName, newName, reRender);
   } catch (err) {
@@ -397,11 +523,11 @@ async function moveOrRenameFile(oldName, newName, reRender = true) {
 async function promptRenameFile(index, event) {
   if (event) event.stopPropagation();
   const f = files[index];
-  const newName = prompt(`Renomear "${f.name}" para:`, f.name);
+  const newName = prompt(`Rename "${f.name}" to:`, f.name);
   if (!newName || newName === f.name) return;
 
   await moveOrRenameFile(f.name, newName, true);
-  document.getElementById('statusText').textContent = 'Ficheiro renomeado';
+  document.getElementById('statusText').textContent = 'File renamed';
 }
 
 function applyRename(oldName, newName, reRender = true) {
@@ -429,12 +555,12 @@ async function deleteFile(index, event) {
   const f = files[index];
 
   if (f.is_main) {
-    alert("Não podes apagar o ficheiro principal do projeto.");
+    alert("You can't delete the project's main file.");
     return;
   }
-  if (!confirm(`Tens a certeza que queres apagar permanentemente o ficheiro '${f.name}'?`)) return;
+  if (!confirm(`Are you sure you want to permanently delete the file '${f.name}'?`)) return;
 
-  document.getElementById('statusText').textContent = 'A apagar...';
+  document.getElementById('statusText').textContent = 'Deleting...';
 
   try {
     const res = await fetch(`/api/projects/${projectId}/files/${f.name}`, {
@@ -443,7 +569,7 @@ async function deleteFile(index, event) {
     });
     if (!res.ok) {
       const err = await res.json();
-      throw new Error(err.detail || 'Erro ao apagar o ficheiro.');
+      throw new Error(err.detail || 'Error deleting the file.');
     }
 
     const wasActive = (activeFile === index);
@@ -472,17 +598,17 @@ async function deleteFile(index, event) {
       renderFileTree();
     }
 
-    document.getElementById('statusText').textContent = 'Ficheiro apagado';
+    document.getElementById('statusText').textContent = 'File deleted';
   } catch (err) {
     alert(err.message);
-    document.getElementById('statusText').textContent = 'Erro ao apagar';
+    document.getElementById('statusText').textContent = 'Error deleting';
   }
 }
 
 async function setMainFile() {
   const f = files[activeFile];
   if (!f || f.binary || !f.name.endsWith('.tex')) {
-    alert('Apenas ficheiros .tex podem ser definidos como ficheiro principal.');
+    alert('Only .tex files can be set as the main file.');
     return;
   }
   try {
@@ -490,11 +616,11 @@ async function setMainFile() {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Erro ao definir ficheiro principal');
+    if (!res.ok) throw new Error('Error setting main file');
     files.forEach(file => file.is_main = false);
     f.is_main = true;
     renderFileTree();
-    document.getElementById('statusText').textContent = `${f.name} é agora o principal`;
+    document.getElementById('statusText').textContent = `${f.name} is now the main file`;
   } catch (err) {
     alert(err.message);
   }
@@ -623,7 +749,7 @@ window.onDropToTreeFolder = async function(event, targetFolder) {
 
     if (sourcePath === targetFolder || (targetFolder && targetFolder.startsWith(sourcePath + '/'))) return;
 
-    document.getElementById('statusText').textContent = 'A mover...';
+    document.getElementById('statusText').textContent = 'Moving...';
 
     if (isFolder) {
       const filesToMove = files.filter(f => f.name.startsWith(sourcePath + '/'));
@@ -646,7 +772,7 @@ window.onDropToTreeFolder = async function(event, targetFolder) {
     
     renderTabs();
     renderFileTree();
-    document.getElementById('statusText').textContent = 'Movido com sucesso';
+    document.getElementById('statusText').textContent = 'Moved successfully';
   } catch (e) {
     console.error(e);
   }
@@ -697,9 +823,9 @@ function renderFileTree() {
           </div>
           
           <div style="display:flex; align-items:center; opacity: 0.8;">
-            <span onclick="newFile('${fullPath}', event)" title="Novo ficheiro aqui" class="ftree-action">📄+</span>
-            <span onclick="newFolder('${fullPath}', event)" title="Nova pasta aqui" class="ftree-action">📁+</span>
-            <span onclick="deleteFolder('${fullPath}', event)" title="Apagar pasta" class="ftree-action" style="font-size:1.1rem" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>
+            <span onclick="newFile('${fullPath}', event)" title="New file here" class="ftree-action">📄+</span>
+            <span onclick="newFolder('${fullPath}', event)" title="New folder here" class="ftree-action">📁+</span>
+            <span onclick="deleteFolder('${fullPath}', event)" title="Delete folder" class="ftree-action" style="font-size:1.1rem" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>
           </div>
           
         </div>
@@ -723,14 +849,14 @@ function renderFileTree() {
         const isActive = i === activeFile ? 'active' : '';
 
         const starIcon = f.is_main
-          ? `<span title="Ficheiro Principal" style="color:var(--red);font-size:1rem;margin-left:0.3rem;line-height:0;">★</span>`
+          ? `<span title="Main File" style="color:var(--red);font-size:1rem;margin-left:0.3rem;line-height:0;">★</span>`
           : '';
 
         const renameIcon = `
-          <span onclick="promptRenameFile(${i}, event)" title="Renomear" style="color:#aaa;font-size:0.85rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#2563EB'" onmouseout="this.style.color='#aaa'">✎</span>`;
+          <span onclick="promptRenameFile(${i}, event)" title="Rename" style="color:#aaa;font-size:0.85rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#2563EB'" onmouseout="this.style.color='#aaa'">✎</span>`;
 
         const deleteIcon = !f.is_main
-          ? `<span onclick="deleteFile(${i}, event)" title="Apagar ficheiro" style="color:#aaa;font-size:1.1rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>`
+          ? `<span onclick="deleteFile(${i}, event)" title="Delete file" style="color:#aaa;font-size:1.1rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>`
           : '';
 
         const icon = f.binary

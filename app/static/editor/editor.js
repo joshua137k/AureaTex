@@ -1,5 +1,3 @@
-
-
 const NOVEATEX_LATEX_LANG_ID = 'joshuatex-latex';
 
 
@@ -140,26 +138,10 @@ function registerLatexLanguage() {
 }
 
 
-function registerNoveaLanguage() {
-  monaco.languages.register({ id: 'noveatex-script' });
-  monaco.languages.setMonarchTokensProvider('noveatex-script', {
-    keywords: ['function', 'end', 'if', 'else', 'elseif', 'for', 'while', 'return', 'break', 'continue', 'true', 'false'],
-    tokenizer: {
-      root: [
-        [/%.*$/, 'comment'],
-        [/\b(function|end|if|else|elseif|for|while|return|break|continue|true|false)\b/, 'keyword'],
-        [/\b\d+(\.\d+)?([eE][+-]?\d+)?\b/, 'number'],
-        [/"[^"]*"/, 'string'],
-        [/'[^']*'/, 'string'],
-        [/[+\-*/^=<>~&|]/, 'operator'],
-      ],
-    },
-  });
-}
+
 
 function languageForFile(filename) {
   const lower = (filename || '').toLowerCase();
-  if (lower.endsWith('.m') || lower.endsWith('.nv')) return 'noveatex-script';
   if (lower.endsWith('.bib')) return 'plaintext';
   return NOVEATEX_LATEX_LANG_ID;
 }
@@ -167,7 +149,6 @@ function languageForFile(filename) {
 
 function initEditor() {
   registerLatexLanguage();
-  registerNoveaLanguage();
 
   editor = monaco.editor.create(document.getElementById('monaco-container'), {
     model: null,
@@ -216,18 +197,18 @@ function insertSnippet(text) {
 }
 
 function insertTable() {
-  const rows = prompt('Número de linhas:', '3');
-  const cols = prompt('Número de colunas:', '3');
+  const rows = prompt('Number of rows:', '3');
+  const cols = prompt('Number of columns:', '3');
   if (!rows || !cols) return;
   const r = parseInt(rows), c = parseInt(cols);
   const colSpec = Array(c).fill('c').join('|');
-  const header = Array(c).fill('Cabeçalho').join(' & ') + ' \\\\';
-  const dataRow = Array(c).fill('Dados').join(' & ') + ' \\\\';
+  const header = Array(c).fill('Header').join(' & ') + ' \\\\';
+  const dataRow = Array(c).fill('Data').join(' & ') + ' \\\\';
   const dataRows = Array(r - 1).fill(dataRow).join('\n    ');
   insertSnippet(
     `\\begin{table}[h]\n  \\centering\n  \\begin{tabular}{|${colSpec}|}` +
     `\n    \\hline\n    ${header}\n    \\hline\n    ${dataRows}\n    \\hline` +
-    `\n  \\end{tabular}\n  \\caption{Legenda}\n\\end{table}`
+    `\n  \\end{tabular}\n  \\caption{Caption}\n\\end{table}`
   );
 }
 
@@ -281,10 +262,10 @@ function openPDFInNewTab(btnElement) {
   const iframe = document.getElementById('pdfPreviewIframe');
   if (iframe.src && iframe.src !== 'about:blank') {
     externalPdfWindow = window.open(currentPdfUrl || iframe.src, 'JoshuaTeX_PDF');
-    const codeBtn = document.querySelector('#viewModeGroup button[title="Ver: Só Código"]');
+    const codeBtn = document.querySelector('#viewModeGroup button[title="View: Code Only"]');
     setViewMode('code', codeBtn);
   } else {
-    alert('Compila o projeto primeiro para gerar o PDF.');
+    alert('Compile the project first to generate the PDF.');
   }
 }
 

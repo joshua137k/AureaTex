@@ -8,7 +8,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
-from core.config import APP_URL, CLIENT_ID, CLIENT_SECRET, GITEA_URL, REDIRECT_URI
+from core.config import (
+    APP_URL, 
+    CLIENT_ID, 
+    CLIENT_SECRET, 
+    GITEA_URL, 
+    REDIRECT_URI,
+    GITHUB_CLIENT_ID,
+    GITHUB_CLIENT_SECRET
+)
 from core.database import get_db
 from core.security import (
     create_jwt,
@@ -144,7 +152,6 @@ async def auth_callback(code: str, state: str = "", cur=Depends(get_db)):
     avatar_url   = gitea_user.get("avatar_url", "")
 
     if logged_in_user_id:
-        # A) VÍNCULO EXPLÍCITO (Utilizador autenticado clicou em "Vincular Gitea")
         await cur.execute("SELECT id FROM users WHERE gitea_id = %s", (gitea_id,))
         existing = await cur.fetchone()
         if existing and existing["id"] != logged_in_user_id:
@@ -200,5 +207,112 @@ async def auth_callback(code: str, state: str = "", cur=Depends(get_db)):
 
     await cur.connection.commit()
 
+    token = create_jwt(user_id, db_username)
+    return RedirectResponse(url=f"{APP_URL}/app/projects?token={token}")
+
+
+
+
+
+
+
+@router.get("/login/github")
+def login_github(token: Optional[str] = None):
+    if not GITHUB_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="GITHUB_CLIENT_ID não configurado.")
+    
+    state_payload = {"rnd": secrets.token_urlsafe(8)}
+    if token:
+        state_payload["token"] = token
+        
+    state_str = base64.urlsafe_b64encode(json.dumps(state_payload).encode()).decode().rstrip("=")
+    
+    url = (
+        f"https://github.com/login/oauth/authorize"
+        f"?client_id={GITHUB_CLIENT_ID}"
+        f"&redirect_uri={APP_URL}/auth/github/callback"
+        f"&scope=user:email,repo"
+        f"&state={state_str}"
+    )
+    return RedirectResponse(url=url)
+
+
+@router.get("/auth/github/callback")
+async def github_callback(code: str, state: str = "", cur=Depends(get_db)):
+    logged_in_user_id = None
+    if state:
+        try:
+            state_padded = state + "=" * (-len(state) % 4)
+            state_data = json.loads(base64.urlsafe_b64decode(state_padded).decode())
+            if "token" in state_data:
+                from core.security import decode_jwt
+                payload = decode_jwt(state_data["token"])
+                logged_in_user_id = int(payload["sub"])
+        except Exception:
+            pass
+
+    async with httpx.AsyncClient() as client:
+        token_resp = await client.post(
+            "https://github.com/login/oauth/access_token",
+            data={
+                "client_id": GITHUB_CLIENT_ID,
+                "client_secret": GITHUB_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": f"{APP_URL}/auth/github/callback"
+            },
+            headers={"Accept": "application/json"}
+        )
+        access_token = token_resp.json().get("access_token")
+
+        user_resp = await client.get(
+            "https://api.github.com/user",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        gh_user = user_resp.json()
+
+        email_resp = await client.get(
+            "https://api.github.com/user/emails",
+            headers={"Authorization": f"Bearer {access_token}"}
+        )
+        gh_emails = email_resp.json()
+        primary_email = next((e["email"] for e in gh_emails if e["primary"]), "")
+
+    gh_id = str(gh_user["id"])
+    gh_username = gh_user["login"]
+    display_name = gh_user.get("name") or gh_username
+    avatar_url = gh_user.get("avatar_url", "")
+
+    if logged_in_user_id:
+        await cur.execute(
+            "UPDATE users SET github_id=%s, github_username=%s, github_token=%s, avatar_url=%s WHERE id=%s",
+            (gh_id, gh_username, access_token, avatar_url, logged_in_user_id)
+        )
+        await cur.execute("SELECT username FROM users WHERE id = %s", (logged_in_user_id,))
+        db_username = (await cur.fetchone())["username"]
+        user_id = logged_in_user_id
+    else:
+        await cur.execute("SELECT id, username FROM users WHERE github_id = %s OR (email != '' AND email = %s)", (gh_id, primary_email))
+        row = await cur.fetchone()
+        
+        if row:
+            user_id = row["id"]
+            db_username = row["username"]
+            await cur.execute(
+                "UPDATE users SET github_id=%s, github_username=%s, github_token=%s, avatar_url=%s, last_login=NOW() WHERE id=%s",
+                (gh_id, gh_username, access_token, avatar_url, user_id)
+            )
+        else:
+            db_username = gh_username
+            await cur.execute(
+                """
+                INSERT INTO users (github_id, github_username, username, email, display_name, avatar_url, github_token, last_login)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
+                """,
+                (gh_id, gh_username, gh_username, primary_email, display_name, avatar_url, access_token)
+            )
+            await cur.execute("SELECT LAST_INSERT_ID() as id")
+            user_id = (await cur.fetchone())["id"]
+
+    await cur.connection.commit()
     token = create_jwt(user_id, db_username)
     return RedirectResponse(url=f"{APP_URL}/app/projects?token={token}")

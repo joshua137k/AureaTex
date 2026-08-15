@@ -14,7 +14,7 @@ async def get_pool() -> aiomysql.Pool:
             user=DB_USER,
             password=DB_PASSWORD,
             db=DB_NAME,
-            autocommit=True,
+            autocommit=False,
             charset="utf8mb4",
             minsize=1,
             maxsize=10,

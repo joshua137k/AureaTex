@@ -1,4 +1,3 @@
-
 async function compilePDF() {
   if (compiling) return;
   compiling = true;
@@ -12,12 +11,12 @@ async function compilePDF() {
 
   dot.className    = 'status-dot compiling';
   log.className    = 'log-box';
-  log.textContent  = 'A compilar no servidor...';
+  log.textContent  = 'Compiling on server...';
   panel.style.display = 'none';
   btn.innerHTML    = `<svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:white;fill:none;stroke-width:2.5">
     <circle cx="12" cy="12" r="10"/>
     <polyline points="10,15 15,12 10,9"/>
-  </svg> Compilando...`;
+  </svg> Compiling...`;
   btn.disabled = true;
 
   try {
@@ -31,15 +30,64 @@ async function compilePDF() {
       if (currentPdfUrl) URL.revokeObjectURL(currentPdfUrl);
       currentPdfUrl = URL.createObjectURL(blob);
 
-      document.getElementById('pdfPreviewIframe').src = currentPdfUrl + '#toolbar=0&view=FitH';
+      const iframe = document.getElementById('pdfPreviewIframe');
+
+      iframe.onload = () => {
+        const viewerWindow = iframe.contentWindow;
+        
+
+
+        const app = viewerWindow.PDFViewerApplication;
+        
+        if (app && app.initializedPromise) {
+            app.initializedPromise.then(() => {
+                app.eventBus.on('pagechanging', (evt) => {
+                    document.getElementById('pdfCurrentPage').textContent = evt.pageNumber;
+                });
+                app.eventBus.on('pagesinit', () => {
+                    document.getElementById('pdfTotalPages').textContent = app.pagesCount;
+                });
+                app.eventBus.on('scalechanging', (evt) => {
+                    document.getElementById('pdfZoomLabel').textContent = Math.round(evt.scale * 100) + '%';
+                });
+            });
+        }
+
+        viewerWindow.ondblclick = async (e) => {
+          const pageEl = e.target.closest('.page');
+          if (!pageEl) return;
+          
+          const pageNum = parseInt(pageEl.dataset.pageNumber);
+          const rect = pageEl.getBoundingClientRect();
+          const scale = viewerWindow.PDFViewerApplication.pdfViewer.currentScale || 1.0;
+          const ptX = (e.clientX - rect.left) / scale;
+          const ptY = (e.clientY - rect.top) / scale;
+
+          console.log(`[SyncTeX] Click detected: Page ${pageNum} | X: ${ptX.toFixed(2)} | Y: ${ptY.toFixed(2)}`);
+
+          try {
+            const res = await fetch(`/api/projects/${projectId}/synctex?page=${pageNum}&x=${ptX}&y=${ptY}`, {
+               headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if(data.file && data.line) jumpToLine(data.line, data.file);
+          } catch(err) {
+            console.error("SyncTeX communication failed:", err);
+          }
+        };
+      };
+
+      iframe.src = '/static/pdfjs/web/viewer.html?file=' + encodeURIComponent(currentPdfUrl) + '#toolbar=0&view=FitH';
+
       if (externalPdfWindow && !externalPdfWindow.closed) {
-        externalPdfWindow.location.replace(currentPdfUrl);
+        externalPdfWindow.location.replace('/static/pdfjs/web/viewer.html?file=' + encodeURIComponent(currentPdfUrl) + '#toolbar=0&view=FitH');
       }
+
 
       dot.className    = 'status-dot';
       dot.style.background = '#16A34A';
       log.className    = 'log-box success';
-      log.textContent  = '✓ PDF compilado com sucesso! (clica para ver warnings)';
+      log.textContent  = '✓ PDF compiled successfully! (click to see warnings)';
       setTimeout(() => dot.style.background = '', 2000);
 
       try {
@@ -48,13 +96,13 @@ async function compilePDF() {
         });
         const logData = await logRes.json();
         if (logData.length > 0 && logData[0].log_output) {
-          const { errors, warnings } = parseLatexLog(logData[0].log_output);
+          const { errors, warnings } = parseLatexLogAsync(logData[0].log_output);
           currentErrors   = errors;
           currentWarnings = warnings;
           document.getElementById('rawLogContent').textContent = logData[0].log_output;
           renderErrorPanel(errors, warnings);
           if (warnings.length > 0) {
-            log.textContent = `✓ Compilado com ${warnings.length} warning(s). Clica para ver.`;
+            log.textContent = `✓ Compiled with ${warnings.length} warning(s). Click to view.`;
           }
         }
       } catch { }
@@ -62,7 +110,7 @@ async function compilePDF() {
     } else {
       const errData = await res.json();
       const rawLog  = errData.detail?.log || JSON.stringify(errData.detail);
-      const { errors, warnings } = parseLatexLog(rawLog);
+      const { errors, warnings } = parseLatexLogAsync(rawLog);
       currentErrors   = errors;
       currentWarnings = warnings;
 
@@ -75,16 +123,16 @@ async function compilePDF() {
       dot.className   = 'status-dot error';
       log.className   = 'log-box error';
       log.textContent = errors.length > 0
-        ? `! ${errors.length} erro(s) de compilação. Clica para ver.`
-        : '! Erro de compilação. Clica para ver o log.';
+        ? `! ${errors.length} compilation error(s). Click to view.`
+        : '! Compilation error. Click to view the log.';
     }
 
   } catch {
-    log.textContent = '! Erro de ligação ao servidor.';
+    log.textContent = '! Server connection error.';
     dot.className   = 'status-dot error';
   } finally {
     btn.disabled  = false;
-    btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg> Compilar';
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><polygon points="5,3 19,12 5,21"/></svg> Compile';
     compiling     = false;
   }
 }
@@ -100,33 +148,33 @@ function downloadPDF() {
     a.click();
     document.body.removeChild(a);
   } else {
-    alert('Por favor, compila o projeto primeiro para gerar o PDF.');
+    alert('Please compile the project first to generate the PDF.');
   }
 }
 
 function downloadZip() {
   const log = document.getElementById('logBox');
-  log.textContent = 'A preparar ZIP...';
+  log.textContent = 'Preparing ZIP...';
 
   fetch(`/api/projects/${projectId}/download-zip`, {
     headers: { 'Authorization': `Bearer ${token}` }
   })
   .then(res => {
-    if (!res.ok) throw new Error('Erro ao gerar ZIP');
+    if (!res.ok) throw new Error('Error generating ZIP');
     return res.blob();
   })
   .then(blob => {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = (document.getElementById('projectTitle').value || 'projeto') + '.zip';
+    a.download = (document.getElementById('projectTitle').value || 'project') + '.zip';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    log.textContent = '✓ ZIP descarregado.';
+    log.textContent = '✓ ZIP downloaded.';
   })
-  .catch(err => { log.textContent = '! Erro ao gerar ZIP: ' + err.message; });
+  .catch(err => { log.textContent = '! Error generating ZIP: ' + err.message; });
 }
 
 async function publishGitea() {
@@ -136,13 +184,13 @@ async function publishGitea() {
   const log = document.getElementById('logBox');
 
   btn.disabled    = true;
-  btn.innerHTML   = '<span style="font-size:12px">A enviar...</span>';
+  btn.innerHTML   = '<span style="font-size:12px">Sending...</span>';
   dot.className   = 'status-dot compiling';
   log.className   = 'log-box';
-  log.textContent = 'A preparar sincronização com o Gitea...';
+  log.textContent = 'Preparing synchronization with Gitea...';
 
   try {
-    const res  = await fetch(`/api/projects/${projectId}/publish-gitea`, {
+    const res  = await fetch(`/api/projects/${projectId}/publish-remote`, {
       method : 'POST', headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
@@ -153,7 +201,7 @@ async function publishGitea() {
     } else { throw new Error(data.detail); }
   } catch (err) {
     log.className = 'log-box error';
-    log.textContent = '! Falha Gitea: ' + err.message;
+    log.textContent = '! Gitea failure: ' + err.message;
     dot.className = 'status-dot error';
   } finally {
     btn.disabled  = false;
@@ -167,29 +215,29 @@ async function pullGitea() {
   const log = document.getElementById('logBox');
 
   btn.disabled    = true;
-  btn.innerHTML   = '<span style="font-size:12px">A puxar...</span>';
+  btn.innerHTML   = '<span style="font-size:12px">Pulling...</span>';
   dot.className   = 'status-dot compiling';
   log.className   = 'log-box';
-  log.textContent = 'A puxar alterações do Gitea...';
+  log.textContent = 'Pulling changes from Gitea...';
 
   try {
-    const res  = await fetch(`/api/projects/${projectId}/pull-gitea`, {
+    const res  = await fetch(`/api/projects/${projectId}/pull-remote`, {
       method: 'POST', headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
     if (res.ok) {
       dot.className = 'status-dot'; dot.style.background = '#16A34A';
       log.className = 'log-box success';
-      log.textContent = `✓ ${data.message} A atualizar o projeto...`;
+      log.textContent = `✓ ${data.message} Updating project...`;
       
       setTimeout(() => {
         window.location.reload();
       }, 1000);
 
-    } else { throw new Error(data.detail || 'Erro desconhecido'); }
+    } else { throw new Error(data.detail || 'Unknown error'); }
   } catch (err) {
     log.className   = 'log-box error';
-    log.textContent = '! Falha Pull Gitea: ' + err.message;
+    log.textContent = '! Gitea Pull failure: ' + err.message;
     dot.className   = 'status-dot error';
     btn.disabled  = false;
     btn.innerHTML = _giteaBtnHTML('Pull');
@@ -203,56 +251,72 @@ function _giteaBtnHTML(label) {
   </svg>${label}`;
 }
 
-function parseLatexLog(log) {
-  const errors   = [];
-  const warnings = [];
-  const lines    = log.split('\n');
+function parseLatexLogAsync(logData) {
+  return new Promise((resolve) => {
+    const workerCode = `
+      self.onmessage = function(e) {
+        const log = e.data;
+        const errors = [];
+        const warnings = [];
+        const lines = log.split('\\n');
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
+        function findCurrentFile(currentIndex) {
+          for (let i = currentIndex; i >= 0; i--) {
+            const matches = lines[i].match(/\\(([^()]+\\.tex)/g);
+            if (matches) {
+              return matches[matches.length - 1].replace('(', '').replace(/^\\.\\//, '');
+            }
+          }
+          return null;
+        }
 
-    if (line.startsWith('! ')) {
-      const msg = line.slice(2).trim();
-      let lineNum = null, context = '';
-      for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
-        const m = lines[j].match(/^l\.(\d+)\s+(.*)/);
-        if (m) { lineNum = parseInt(m[1]); context = m[2].trim(); break; }
-      }
-      errors.push({ type: 'error', msg, lineNum, file: findCurrentFile(lines, i), context });
-    }
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
 
-    const warnPatterns = [
-      /^LaTeX Warning: (.+)/,
-      /^Package (\w+) Warning: (.+)/,
-      /^Overfull \\hbox (.+)/,
-      /^Underfull \\hbox (.+)/,
-    ];
-    for (const pat of warnPatterns) {
-      const m = line.match(pat);
-      if (m) {
-        const lm = line.match(/(?:on input line|line) (\d+)/i)
-          || (lines[i + 1] || '').match(/(?:on input line|line) (\d+)/i);
-        warnings.push({
-          type: 'warning',
-          msg : (m[1] || m[0]).trim(),
-          lineNum: lm ? parseInt(lm[1]) : null,
-          file: null, context: ''
-        });
-        break;
-      }
-    }
-  }
-  return { errors, warnings };
-}
+          if (line.startsWith('! ')) {
+            const msg = line.slice(2).trim();
+            let lineNum = null, context = '';
+            for (let j = i + 1; j < Math.min(i + 8, lines.length); j++) {
+              const m = lines[j].match(/^l\\.(\\d+)\\s+(.*)/);
+              if (m) { lineNum = parseInt(m[1]); context = m[2].trim(); break; }
+            }
+            errors.push({ type: 'error', msg, lineNum, file: findCurrentFile(i), context });
+          }
 
-function findCurrentFile(lines, currentIndex) {
-  for (let i = currentIndex; i >= 0; i--) {
-    const matches = lines[i].match(/\(([^()]+\.tex)/g);
-    if (matches) {
-      return matches[matches.length - 1].replace('(', '').replace(/^\.\//, '');
-    }
-  }
-  return null;
+          const warnPatterns = [
+            /^LaTeX Warning: (.+)/,
+            /^Package (\\w+) Warning: (.+)/,
+            /^Overfull \\\\hbox (.+)/,
+            /^Underfull \\\\hbox (.+)/,
+          ];
+          for (const pat of warnPatterns) {
+            const m = line.match(pat);
+            if (m) {
+              const lm = line.match(/(?:on input line|line) (\\d+)/i)
+                || (lines[i + 1] || '').match(/(?:on input line|line) (\\d+)/i);
+              warnings.push({
+                type: 'warning',
+                msg : (m[1] || m[0]).trim(),
+                lineNum: lm ? parseInt(lm[1]) : null,
+                file: null, context: ''
+              });
+              break;
+            }
+          }
+        }
+        self.postMessage({ errors, warnings });
+      };
+    `;
+    const blob = new Blob([workerCode], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+
+    worker.onmessage = function(e) {
+      resolve(e.data);
+      worker.terminate();
+    };
+
+    worker.postMessage(logData);
+  });
 }
 
 function renderErrorPanel(errors, warnings) {
@@ -263,7 +327,7 @@ function renderErrorPanel(errors, warnings) {
 
   if (total === 0) {
     list.innerHTML = `<div style="padding:1rem;text-align:center;color:#16A34A;font-weight:700;font-size:0.85rem;">
-      ✓ Nenhum erro encontrado no log.
+      ✓ No errors found in the log.
     </div>`;
     return;
   }
@@ -272,11 +336,11 @@ function renderErrorPanel(errors, warnings) {
     const isError = e.type === 'error';
     const icon    = isError ? '!' : '▲';
     const locText = e.lineNum
-      ? `${e.file ? e.file + ' ' : ''}linha ${e.lineNum}`
+      ? `${e.file ? e.file + ' ' : ''}line ${e.lineNum}`
       : (e.file || '');
     const jumpBtn = e.lineNum
       ? `<button class="error-jump" onclick="jumpToLine(${e.lineNum},'${e.file || ''}')">
-           Ir para linha ${e.lineNum}
+           Go to line ${e.lineNum}
          </button>` : '';
     return `
       <div class="error-item ${isError ? 'is-error' : 'is-warning'}">
@@ -308,14 +372,6 @@ function jumpToLine(lineNum, filename) {
   goToLine(lineNum);
 }
 
-function goToLine(lineNum) {
-  const line = Math.max(0, lineNum - 1);
-  editor.setCursor({ line, ch: 0 });
-  editor.scrollIntoView({ line, ch: 0 }, 100);
-  editor.focus();
-  const marker = editor.addLineClass(line, 'background', 'error-highlight');
-  setTimeout(() => editor.removeLineClass(line, 'background', 'error-highlight'), 2000);
-}
 
 function toggleErrorPanel() {
   const panel = document.getElementById('errorPanel');
@@ -333,7 +389,39 @@ function toggleRawLog() {
   const btn = document.getElementById('rawLogBtn');
   const show = raw.style.display === 'none';
   raw.style.display = show ? 'block' : 'none';
-  btn.textContent   = show ? 'Ocultar Log' : 'Log Completo';
+  btn.textContent   = show ? 'Hide Log' : 'Full Log';
 }
 
 function toggleLog() { toggleErrorPanel(); }
+
+
+
+
+
+function getPdfViewerApp() {
+    const iframe = document.getElementById('pdfPreviewIframe');
+    if (iframe && iframe.contentWindow && iframe.contentWindow.PDFViewerApplication) {
+        return iframe.contentWindow.PDFViewerApplication;
+    }
+    return null;
+}
+
+function pdfPrevPage() {
+    const app = getPdfViewerApp();
+    if (app && app.page > 1) app.page--;
+}
+
+function pdfNextPage() {
+    const app = getPdfViewerApp();
+    if (app && app.page < app.pagesCount) app.page++;
+}
+
+function pdfZoomOut() {
+    const app = getPdfViewerApp();
+    if (app) app.zoomOut();
+}
+
+function pdfZoomIn() {
+    const app = getPdfViewerApp();
+    if (app) app.zoomIn();
+}

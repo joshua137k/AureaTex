@@ -18,9 +18,14 @@ async def me(user=Depends(get_current_user)):
     # Extrair hashes e tokens por segurança e adicionar flags de estado
     has_pw = bool(user.pop("password_hash", None))
     has_gitea = bool(user.get("gitea_id"))
+
+    user.pop("gitea_token", None)
+    user.pop("github_token", None)
+    user.pop("zotero_api_key", None)
     
     user["has_password"] = has_pw
     user["has_gitea"] = has_gitea
+    user["has_github"] = bool(user.get("github_id"))
     return user
 
 

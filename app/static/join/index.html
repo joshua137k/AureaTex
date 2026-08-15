@@ -1,10 +1,12 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AureoTeX — Convite</title>
+  <title>AureoTeX - Invite</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+
   <style>
     :root { --red: #E03030; --black: #111111; --white: #FFFFFF; --shadow: 4px 4px 0 #111; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -21,15 +23,15 @@
 <body>
 
   <div class="card" id="inviteCard" style="display:none;">
-    <h1>Convite Colaborativo</h1>
-    <p>Foste convidado(a) para colaborar num projeto do AureoTeX.</p>
+    <h1>Collaboration Invite</h1>
+    <p>You've been invited to collaborate on an AureoTeX project.</p>
     
     <div class="project-box">
-      <div id="pName" style="font-size: 1.2rem; margin-bottom: 0.2rem;">A carregar...</div>
-      <div id="pOwner" style="font-size: 0.8rem; font-weight: 500; color: #111;">Dono: ---</div>
+      <div id="pName" style="font-size: 1.2rem; margin-bottom: 0.2rem;">Loading...</div>
+      <div id="pOwner" style="font-size: 0.8rem; font-weight: 500; color: #111;">Owner: ---</div>
     </div>
 
-    <button class="btn btn-red" onclick="acceptInvite()" id="btnAccept">Aceitar e Entrar no Projeto</button>
+    <button class="btn btn-red" onclick="acceptInvite()" id="btnAccept">Accept and Enter Project</button>
   </div>
 
   <script>
@@ -38,33 +40,33 @@
     const userToken = localStorage.getItem('Joshuatex_token');
 
     if (!userToken) {
-      alert("Precisas de ter sessão iniciada para aceitar um convite.");
+      alert("You need to be logged in to accept an invite.");
       window.location.href = `/`; 
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
       if (!inviteToken) {
-        document.body.innerHTML = "<h2 style='text-align:center;'>Convite Inválido. Link malformado.</h2>";
+        document.body.innerHTML = "<h2 style='text-align:center;'>Invalid Invite. Malformed link.</h2>";
         return;
       }
 
       try {
         const res = await fetch(`/api/invites/${inviteToken}`);
-        if (!res.ok) throw new Error("Link expirado ou revogado pelo dono.");
+        if (!res.ok) throw new Error("Link expired or revoked by the owner.");
         
         const data = await res.json();
         
         document.getElementById('pName').textContent = data.project_name;
-        document.getElementById('pOwner').textContent = `Dono: ${data.owner_name}`;
+        document.getElementById('pOwner').textContent = `Owner: ${data.owner_name}`;
         document.getElementById('inviteCard').style.display = 'block';
       } catch (err) {
-        document.body.innerHTML = `<div class="card"><h1>Erro</h1><p>${err.message}</p><a href="/app/projects" class="btn btn-red">Ir para Projetos</a></div>`;
+        document.body.innerHTML = `<div class="card"><h1>Error</h1><p>${err.message}</p><a href="/app/projects" class="btn btn-red">Go to Projects</a></div>`;
       }
     });
 
     async function acceptInvite() {
       const btn = document.getElementById('btnAccept');
-      btn.textContent = "A aceitar...";
+      btn.textContent = "Accepting...";
       btn.disabled = true;
 
       try {
@@ -75,7 +77,7 @@
         
         if (!res.ok) {
           const errData = await res.json();
-          throw new Error(errData.detail || "Erro ao aceitar convite.");
+          throw new Error(errData.detail || "Error accepting invite.");
         }
         
         const data = await res.json();
@@ -84,7 +86,7 @@
         window.location.href = `/app/editor?id=${data.project_id}`;
       } catch (err) {
         alert(err.message);
-        btn.textContent = "Aceitar e Entrar no Projeto";
+        btn.textContent = "Accept and Enter Project";
         btn.disabled = false;
       }
     }

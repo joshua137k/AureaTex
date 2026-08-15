@@ -1,16 +1,18 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AureoTeX — Entrar</title>
+<title>AureoTeX - Sign in</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/login/style.css">
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
+
 </head>
 <body>
 <div class="top-bar"></div>
 <header class="header">
-  <a href="index.html" class="logo">
+  <a href="/" class="logo">
     <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
       <rect width="28" height="28" fill="#E03030"/>
       <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/>
@@ -20,61 +22,69 @@
 </header>
 <main class="main">
   <div class="left-panel">
-    <h1>Escreve<br>em <em>LaTeX.</em><br>Publica.<br>Colabora.</h1>
-    <p>O teu editor LaTeX self-hosted com controlo de versões via Gitea. Nada vai à nuvem de ninguém.</p>
+    <h1>Write<br>in <em>LaTeX.</em><br>Publish.<br>Collaborate.</h1>
+    <p>Your self-hosted LaTeX editor with version control via Gitea. Nothing goes to anyone else's cloud.</p>
     <ul class="feature-list">
-      <li>Compilação PDF em tempo real</li>
-      <li>Controlo de versões com Git</li>
-      <li>100% nos teus servidores</li>
+      <li>Real-time PDF compilation</li>
+      <li>Version control with Git</li>
+      <li>100% on your own servers</li>
     </ul>
   </div>
   <div class="right-panel">
     <div class="login-box">
-      <h2 id="form-title">Entrar</h2>
-      <p class="subtitle" id="form-subtitle">Acede com a tua conta Gitea ou com as tuas credenciais.</p>
+      <h2 id="form-title">Sign in</h2>
+      <p class="subtitle" id="form-subtitle">Sign in with your Gitea account or with your credentials.</p>
 
-      <a href="/login" class="btn-gitea" id="gitea-btn">
-        <svg class="gitea-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.483 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
-        </svg>
-        Entrar com Gitea
-      </a>
+     <div id="oauth-buttons" style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <a href="/login" class="btn-gitea" id="gitea-btn" style="background: #e08b1a;">
+          <svg class="gitea-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.483 0-.237-.009-.868-.013-1.703-2.782.604-3.369-1.341-3.369-1.341-.454-1.155-1.11-1.462-1.11-1.462-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0 1 12 6.836c.85.004 1.705.115 2.504.337 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+          </svg>
+          Sign in with Gitea
+        </a>
+        <a href="/login/github" class="btn-gitea" id="github-btn" style="background: #24292e;">
+          <svg class="gitea-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+          Sign in with GitHub
+        </a>
+      </div>
 
-      <div class="divider" id="form-divider">ou</div>
+      <div class="divider" id="form-divider">or</div>
 
       <div id="error-msg" style="display:none; color: var(--white); background: var(--red); padding: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; font-weight: bold; border: 2px solid var(--black);"></div>
 
       <form id="login-form" class="manual-form" onsubmit="handleManualLogin(event)">
         <div class="field">
-          <label>Utilizador</label>
+          <label>Username</label>
           <input type="text" id="login-username" placeholder="nickname" required>
         </div>
         <div class="field">
           <label>Password</label>
           <input type="password" id="login-password" placeholder="••••••••" required>
         </div>
-        <button type="submit" class="btn-primary" id="btn-login-submit">Entrar →</button>
+        <button type="submit" class="btn-primary" id="btn-login-submit">Sign in →</button>
         <p class="footer-note" style="margin-top: 1rem;">
-          Não tens conta? <a href="#" onclick="toggleMode(event, 'register')">Criar Conta</a>
+          Don't have an account? <a href="#" onclick="toggleMode(event, 'register')">Create Account</a>
         </p>
       </form>
 
       <form id="register-form" class="manual-form" onsubmit="handleRegister(event)" style="display: none;">
         <div class="field">
-          <label>Utilizador</label>
+          <label>Username</label>
           <input type="text" id="reg-username" placeholder="nickname" required>
         </div>
         <div class="field">
           <label>Email</label>
-          <input type="email" id="reg-email" placeholder="nickname@exemplo.pt" required>
+          <input type="email" id="reg-email" placeholder="nickname@example.com" required>
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="reg-password" placeholder="Mínimo 6 caracteres" required minlength="6">
+          <input type="password" id="reg-password" placeholder="Minimum 6 characters" required minlength="6">
         </div>
-        <button type="submit" class="btn-primary" id="btn-reg-submit">Criar Conta →</button>
+        <button type="submit" class="btn-primary" id="btn-reg-submit">Create Account →</button>
         <p class="footer-note" style="margin-top: 1rem;">
-          Já tens conta? <a href="#" onclick="toggleMode(event, 'login')">Entrar aqui</a>
+          Already have an account? <a href="#" onclick="toggleMode(event, 'login')">Sign in here</a>
         </p>
       </form>
 
@@ -90,6 +100,7 @@ function toggleMode(e, mode) {
   const title = document.getElementById('form-title');
   const subtitle = document.getElementById('form-subtitle');
   const giteaBtn = document.getElementById('gitea-btn');
+  const githubBtn = document.getElementById('github-btn');
   const divider = document.getElementById('form-divider');
   const errorMsg = document.getElementById('error-msg');
   
@@ -99,16 +110,18 @@ function toggleMode(e, mode) {
     loginForm.style.display = 'none';
     regForm.style.display = 'flex';
     giteaBtn.style.display = 'none';
+    githubBtn.style.display = 'none';
     divider.style.display = 'none';
-    title.textContent = 'Criar Conta';
-    subtitle.textContent = 'Regista-te localmente para usar o AureoTeX.';
+    title.textContent = 'Create Account';
+    subtitle.textContent = 'Register locally to use AureoTeX.';
   } else {
     loginForm.style.display = 'flex';
     regForm.style.display = 'none';
     giteaBtn.style.display = 'flex';
+    githubBtn.style.display = 'flex';
     divider.style.display = 'flex';
-    title.textContent = 'Entrar';
-    subtitle.textContent = 'Acede com a tua conta Gitea ou com as tuas credenciais.';
+    title.textContent = 'Sign in';
+    subtitle.textContent = 'Sign in with your Gitea account or with your credentials.';
   }
 }
 
@@ -121,7 +134,7 @@ function showError(msg) {
 async function handleManualLogin(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-login-submit');
-  btn.textContent = 'A entrar...';
+  btn.textContent = 'Signing in...';
   btn.disabled = true;
 
   const username = document.getElementById('login-username').value;
@@ -139,12 +152,12 @@ async function handleManualLogin(e) {
       localStorage.setItem('Joshuatex_token', data.access_token);
       window.location.href = '/app/projects';
     } else {
-      showError(data.detail || 'Erro ao entrar. Verifica os dados.');
+      showError(data.detail || 'Error signing in. Check your details.');
     }
   } catch (err) {
-    showError('Erro de ligação ao servidor.');
+    showError('Connection error with the server.');
   } finally {
-    btn.textContent = 'Entrar →';
+    btn.textContent = 'Sign in →';
     btn.disabled = false;
   }
 }
@@ -152,7 +165,7 @@ async function handleManualLogin(e) {
 async function handleRegister(e) {
   e.preventDefault();
   const btn = document.getElementById('btn-reg-submit');
-  btn.textContent = 'A criar...';
+  btn.textContent = 'Creating...';
   btn.disabled = true;
 
   const username = document.getElementById('reg-username').value;
@@ -171,12 +184,12 @@ async function handleRegister(e) {
       localStorage.setItem('Joshuatex_token', data.access_token);
       window.location.href = '/app/projects';
     } else {
-      showError(data.detail || 'Erro ao criar conta.');
+      showError(data.detail || 'Error creating account.');
     }
   } catch (err) {
-    showError('Erro de ligação ao servidor.');
+    showError('Connection error with the server.');
   } finally {
-    btn.textContent = 'Criar Conta →';
+    btn.textContent = 'Create Account →';
     btn.disabled = false;
   }
 }

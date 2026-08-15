@@ -1,9 +1,7 @@
-
-
 async function openShareModal() {
   const modal = document.getElementById('shareModal');
   const input = document.getElementById('shareLinkInput');
-  input.value = 'A gerar link...';
+  input.value = 'Generating link...';
   modal.style.display = 'flex';
 
   try {
@@ -13,12 +11,12 @@ async function openShareModal() {
       body   : JSON.stringify({ role: 'editor' })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Erro ao gerar convite.');
+    if (!res.ok) throw new Error(data.detail || 'Error generating invite.');
     input.value = data.url;
   } catch (e) {
-    input.value = 'Sem permissão ou erro de rede.';
-    if (e.message.includes('Sem permissão')) {
-      alert('Apenas o dono do projeto pode gerar links de convite.');
+    input.value = 'No permission or network error.';
+    if (e.message.includes('No permission')) {
+      alert('Only the project owner can generate invite links.');
       closeShareModal();
     }
   }
@@ -34,6 +32,6 @@ function copyShareLink() {
   document.execCommand('copy');
   const btn = document.querySelector('.modal-actions .btn-black');
   const old = btn.textContent;
-  btn.textContent = 'Copiado ✓';
+  btn.textContent = 'Copied ✓';
   setTimeout(() => btn.textContent = old, 2000);
 }

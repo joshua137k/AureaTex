@@ -37,6 +37,10 @@ services:
       GITEA_CLIENT_ID:    your_gitea_client_id_here
       GITEA_CLIENT_SECRET: your_gitea_client_secret_here
 
+      # -- GIT OAuth --
+      GITHUB_CLIENT_ID: "o_teu_client_id_aqui"
+      GITHUB_CLIENT_SECRET: "o_teu_client_secret_aqui"
+
       # -- App Settings --
       APP_URL:            http://localhost:8111
       JWT_SECRET:         change-this-secret-for-production

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from core.config import STATIC_DIR
 from core.database import get_pool
-from routers import auth, collab, compile, files, projects, users, invites, references, execute, vscode
+from routers import auth, collab, compile, files, projects, users, invites, references, vscode
 
 app = FastAPI(title="JoshuaTeX API")
 
@@ -31,11 +31,10 @@ app.include_router(users.router)
 app.include_router(collab.router)
 app.include_router(invites.router)
 app.include_router(references.router)
-app.include_router(execute.router)
 app.include_router(vscode.router)
 
 # ---------------------------------------------------------------------------
-# Frontend estático
+# Static frontend
 # ---------------------------------------------------------------------------
 
 if os.path.isdir(STATIC_DIR):
@@ -44,10 +43,17 @@ if os.path.isdir(STATIC_DIR):
 
 @app.get("/")
 def root():
-    index_path = os.path.join(STATIC_DIR, "login", "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {"status": "JoshuaTeX API online. Coloca os HTML em /app/static/"}
+    # Serve the landing page at the root of /static first.
+    landing_path = os.path.join(STATIC_DIR, "index.html")
+    if os.path.exists(landing_path):
+        return FileResponse(landing_path)
+
+    # Fall back to the login page if no landing page is present.
+    login_path = os.path.join(STATIC_DIR, "login", "index.html")
+    if os.path.exists(login_path):
+        return FileResponse(login_path)
+
+    return {"status": "JoshuaTeX API online. Place the HTML files in /app/static/"}
 
 
 @app.get("/app/{page}")
@@ -55,11 +61,11 @@ def serve_page(page: str):
     path = os.path.join(STATIC_DIR, f"{page}/index.html")
     if os.path.exists(path):
         return FileResponse(path)
-    raise HTTPException(status_code=404, detail=f"Página '{page}' não encontrada.")
+    raise HTTPException(status_code=404, detail=f"Page '{page}' not found.")
 
 
 # ---------------------------------------------------------------------------
-# Startup — criar tabelas
+# Startup — create tables
 # ---------------------------------------------------------------------------
 
 @app.on_event("startup")
@@ -151,4 +157,27 @@ async def startup():
                 ADD COLUMN IF NOT EXISTS zotero_user_id VARCHAR(50),
                 ADD COLUMN IF NOT EXISTS zotero_api_key  VARCHAR(100)
             """)
-    print("✅ Tabelas MariaDB criadas / verificadas.")
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS project_file_history (
+                    id          INT AUTO_INCREMENT PRIMARY KEY,
+                    project_id  INT NOT NULL,
+                    filename    VARCHAR(255) NOT NULL,
+                    user_id     INT NOT NULL,
+                    content     LONGTEXT,
+                    saved_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+            await cur.execute("""
+                ALTER TABLE users 
+                ADD COLUMN IF NOT EXISTS github_id VARCHAR(100),
+                ADD COLUMN IF NOT EXISTS github_username VARCHAR(100),
+                ADD COLUMN IF NOT EXISTS github_token TEXT
+            """)
+            await cur.execute("""
+                ALTER TABLE projects 
+                ADD COLUMN IF NOT EXISTS remote_provider VARCHAR(20) DEFAULT 'gitea',
+                ADD COLUMN IF NOT EXISTS remote_repo VARCHAR(255)
+            """)
+    print("✅ MariaDB tables created / verified.")

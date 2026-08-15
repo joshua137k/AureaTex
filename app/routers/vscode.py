@@ -22,11 +22,15 @@ async def _run_pdflatex(project_path: str, main_file: str) -> str:
         "pdflatex",
         "-no-shell-escape",
         "-interaction=nonstopmode",
+        "--",
         main_file,
     ]
+    env = os.environ.copy()
+    env["openin_any"] = "p"
     proc = await asyncio.create_subprocess_exec(
         *cmd,
         cwd=project_path,
+        env=env,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
     )

@@ -7,6 +7,10 @@ CLIENT_SECRET = os.getenv("GITEA_CLIENT_SECRET")
 APP_URL       = os.getenv("APP_URL",           "http://100.103.241.42:8111")
 REDIRECT_URI  = f"{APP_URL}/auth/callback"
 
+# GitHub OAuth
+GITHUB_CLIENT_ID     = os.getenv("GITHUB_CLIENT_ID")
+GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
+
 # JWT
 JWT_SECRET      = os.getenv("JWT_SECRET", "muda-este-secret-em-producao!")
 JWT_ALGORITHM   = "HS256"

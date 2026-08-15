@@ -1,4 +1,3 @@
-
 function openRefsModal() {
   document.getElementById('refsModal').style.display = 'flex';
   checkZoteroStatus();
@@ -29,17 +28,17 @@ async function searchRefs() {
   const results = document.getElementById('refSearchResults');
   if (!q) return;
 
-  results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">A pesquisar...</div>';
+  results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Searching...</div>';
   try {
     const res = await fetch(
       `/api/references/search?q=${encodeURIComponent(q)}&source=${source}&limit=20`,
       { headers: { 'Authorization': `Bearer ${token}` } }
     );
-    if (!res.ok) throw new Error('Erro na pesquisa');
+    if (!res.ok) throw new Error('Search error');
     const items = await res.json();
 
     if (!items.length) {
-      results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Sem resultados.</div>';
+      results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">No results.</div>';
       return;
     }
 
@@ -53,7 +52,7 @@ async function searchRefs() {
           <input type="checkbox" onchange="toggleRefItem(this, ${i})"
             style="margin-top:3px;flex-shrink:0;accent-color:#E03030;">
           <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${typeIcon} ${item.title || 'Sem título'}</div>
+            <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${typeIcon} ${item.title || 'Untitled'}</div>
             <div style="font-size:0.73rem;color:#666;">
               ${authors}${item.year ? ` · ${item.year}` : ''}${item.source ? ` · <em>${item.source}</em>` : ''}
             </div>
@@ -77,7 +76,7 @@ function toggleRefItem(checkbox, index) {
 }
 
 function updateRefsFooter() {
-  document.getElementById('refsSelectedInfo').textContent = `${refsSelected.length} selecionada(s)`;
+  document.getElementById('refsSelectedInfo').textContent = `${refsSelected.length} selected`;
   document.getElementById('refsExportBtn').disabled = refsSelected.length === 0;
 }
 
@@ -88,7 +87,7 @@ async function resolveDoi() {
   const addBtn = document.getElementById('doiAddBtn');
   if (!doi) return;
 
-  result.textContent  = 'A resolver DOI...';
+  result.textContent  = 'Resolving DOI...';
   addBtn.style.display = 'none';
   doiRawItem = null;
 
@@ -96,7 +95,7 @@ async function resolveDoi() {
     const res = await fetch(`/api/references/doi/${encodeURIComponent(doi)}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('DOI não encontrado.');
+    if (!res.ok) throw new Error('DOI not found.');
     doiRawItem           = await res.json();
     result.textContent   = doiRawItem.bibtex;
     addBtn.style.display = 'block';
@@ -126,7 +125,7 @@ async function checkZoteroStatus() {
 async function connectZotero() {
   const userId = document.getElementById('zoteroUserId').value.trim();
   const apiKey = document.getElementById('zoteroApiKey').value.trim();
-  if (!userId || !apiKey) { alert('Preenche o User ID e a API Key.'); return; }
+  if (!userId || !apiKey) { alert('Fill in the User ID and API Key.'); return; }
 
   try {
     const res = await fetch('/api/references/zotero/connect', {
@@ -138,17 +137,17 @@ async function connectZotero() {
     document.getElementById('zoteroNotConnected').style.display = 'none';
     document.getElementById('zoteroConnected').style.display    = 'flex';
     await loadZoteroRefs();
-  } catch (err) { alert('Erro: ' + err.message); }
+  } catch (err) { alert('Error: ' + err.message); }
 }
 
 async function loadZoteroRefs() {
   const list = document.getElementById('zoteroRefList');
-  list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">A carregar biblioteca...</div>';
+  list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Loading library...</div>';
   try {
     const res = await fetch('/api/references/zotero', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Erro ao carregar Zotero');
+    if (!res.ok) throw new Error('Error loading Zotero');
     zoteroAllRefs          = await res.json();
     zoteroFiltered         = [...zoteroAllRefs];
     window._zoteroResults  = zoteroAllRefs;
@@ -171,7 +170,7 @@ function filterZoteroRefs() {
 function renderZoteroRefs() {
   const list = document.getElementById('zoteroRefList');
   if (!zoteroFiltered.length) {
-    list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Sem resultados.</div>';
+    list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">No results.</div>';
     return;
   }
   list.innerHTML = zoteroFiltered.map((ref, i) => {
@@ -182,7 +181,7 @@ function renderZoteroRefs() {
         <input type="checkbox" onchange="toggleRefItem(this, ${i})"
           style="margin-top:3px;flex-shrink:0;accent-color:#E03030;">
         <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${ref.title || 'Sem título'}</div>
+          <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${ref.title || 'Untitled'}</div>
           <div style="font-size:0.73rem;color:#666;">
             ${authors}${ref.year ? ` · ${ref.year}` : ''}${ref.source ? ` · <em>${ref.source}</em>` : ''}
           </div>
@@ -195,8 +194,8 @@ function renderZoteroRefs() {
 
 async function addManualBib() {
   const content = document.getElementById('manualBibInput').value.trim();
-  if (!content) { alert('Introduz uma entrada BibTeX.'); return; }
-  if (!content.startsWith('@')) { alert('Entrada BibTeX inválida. Deve começar por @'); return; }
+  if (!content) { alert('Enter a BibTeX entry.'); return; }
+  if (!content.startsWith('@')) { alert('Invalid BibTeX entry. It must start with @'); return; }
   await _appendRawBib(content);
 }
 
@@ -208,7 +207,7 @@ async function exportSelectedRefs() {
 
 async function _exportToBib(items) {
   const log = document.getElementById('logBox');
-  log.textContent = 'A exportar para refs.bib...';
+  log.textContent = 'Exporting to refs.bib...';
   try {
     const res = await fetch(`/api/references/export-bib/${projectId}`, {
       method : 'POST',
@@ -232,14 +231,19 @@ async function _exportToBib(items) {
 async function _appendRawBib(rawBibtex) {
   const log = document.getElementById('logBox');
   try {
-    const getRes = await fetch(`/api/projects/${projectId}/files/refs.bib`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
     let current = '';
-    if (getRes.ok) {
-      const d = await getRes.json();
-      current = d.content || '';
+    if (typeof openModels !== 'undefined' && openModels.has('refs.bib')) {
+      current = openModels.get('refs.bib').getValue();
+    } else {
+      const getRes = await fetch(`/api/projects/${projectId}/files/refs.bib`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (getRes.ok) {
+        const d = await getRes.json();
+        current = d.content || '';
+      }
     }
+    
     const newContent = current ? current.trimEnd() + '\n\n' + rawBibtex : rawBibtex;
 
     await fetch(`/api/projects/${projectId}/files/refs.bib`, {
@@ -249,21 +253,24 @@ async function _appendRawBib(rawBibtex) {
     });
 
     log.className   = 'log-box success';
-    log.textContent = '✓ Entrada adicionada ao refs.bib';
+    log.textContent = '✓ Entry added to refs.bib';
     document.getElementById('manualBibInput').value = '';
     await _reloadBibFile();
     closeRefsModal();
   } catch (err) {
     log.className   = 'log-box error';
-    log.textContent = '! Erro: ' + err.message;
+    log.textContent = '! Error: ' + err.message;
   }
 }
 
 async function _reloadBibFile() {
-  await loadFiles();
-  const bibIdx = files.findIndex(f => f.name === 'refs.bib');
+  let bibIdx = files.findIndex(f => f.name === 'refs.bib');
+  if (bibIdx === -1) {
+    await loadFiles();
+    bibIdx = files.findIndex(f => f.name === 'refs.bib');
+  }
+  
   if (bibIdx >= 0) {
-    files[bibIdx].content = null;
     if (!openTabs.includes(bibIdx)) openTabs.push(bibIdx);
     await switchFile(bibIdx);
   }

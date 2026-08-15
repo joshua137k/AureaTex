@@ -11,7 +11,7 @@ from core.database import get_db
 from core.security import get_current_user
 
 from routers.collab import sync_doc_content
-
+from routers.collab import _rooms
 
 import os
 import re
@@ -425,12 +425,19 @@ async def export_bib(project_id: int, body: dict, user=Depends(get_current_user)
     if not items:
         raise HTTPException(status_code=400, detail="Nenhum item para exportar.")
 
-    await cur.execute(
-        "SELECT content FROM project_files WHERE project_id = %s AND filename = 'refs.bib'",
-        (project_id,),
-    )
-    existing = await cur.fetchone()
-    existing_bib = existing["content"] if existing else ""
+    existing_bib = ""
+    if project_id in _rooms:
+        room = _rooms[project_id]
+        if 'refs.bib' in room.docs:
+            existing_bib = room.docs['refs.bib'].content
+
+    if not existing_bib:
+        await cur.execute(
+            "SELECT content FROM project_files WHERE project_id = %s AND filename = 'refs.bib'",
+            (project_id,),
+        )
+        existing = await cur.fetchone()
+        existing_bib = existing["content"] if existing else ""
 
     existing_keys = set(re.findall(r"@\w+\{(\w+),", existing_bib))
 
