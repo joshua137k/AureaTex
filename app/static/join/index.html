@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/static/theme.js"></script>
+  <script src="/static/dialog.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AureoTeX - Invite</title>
+  <title>AureaTeX - Invite</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&display=swap" rel="stylesheet">
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
 
@@ -18,13 +20,21 @@
     .btn { padding: 0.6rem 1rem; border: 3px solid var(--black); font-family: 'Space Grotesk', sans-serif; font-size: 0.9rem; font-weight: 700; cursor: pointer; display: block; width: 100%; transition: transform 0.1s, box-shadow 0.1s; text-decoration: none; text-align: center; }
     .btn:hover { transform: translate(2px, 2px); box-shadow: none; }
     .btn-red { background: var(--red); color: var(--white); }
+    :root[data-theme="dark"] { --red: #f05252; --black: #e5e9f0; --white: #1c2029; --shadow: 4px 4px 0 #000; }
+    :root[data-theme="dark"] body { background: #111318; color: var(--black); }
+    :root[data-theme="dark"] .card { border-color: #3a4252; }
+    :root[data-theme="dark"] .card p { color: #9aa5b8; }
+    :root[data-theme="dark"] .project-box { background: rgba(240, 82, 82, .14); }
+    :root[data-theme="dark"] #pOwner { color: var(--black) !important; }
+    :root[data-theme="dark"] .btn { border-color: #3a4252; }
+    :root[data-theme="dark"] .btn-red { color: #fff; }
   </style>
 </head>
 <body>
 
   <div class="card" id="inviteCard" style="display:none;">
     <h1>Collaboration Invite</h1>
-    <p>You've been invited to collaborate on an AureoTeX project.</p>
+    <p>You've been invited to collaborate on an AureaTeX project.</p>
     
     <div class="project-box">
       <div id="pName" style="font-size: 1.2rem; margin-bottom: 0.2rem;">Loading...</div>
@@ -40,8 +50,9 @@
     const userToken = localStorage.getItem('Joshuatex_token');
 
     if (!userToken) {
-      alert("You need to be logged in to accept an invite.");
-      window.location.href = `/`; 
+      // Depois do login o utilizador volta automaticamente a este convite.
+      sessionStorage.setItem('aurea_next', window.location.pathname + window.location.search);
+      window.location.href = '/app/login';
     }
 
     window.addEventListener('DOMContentLoaded', async () => {
@@ -51,7 +62,7 @@
       }
 
       try {
-        const res = await fetch(`/api/invites/${inviteToken}`);
+        const res = await fetch(`/api/invites/${encodeURIComponent(inviteToken)}`);
         if (!res.ok) throw new Error("Link expired or revoked by the owner.");
         
         const data = await res.json();
@@ -60,7 +71,11 @@
         document.getElementById('pOwner').textContent = `Owner: ${data.owner_name}`;
         document.getElementById('inviteCard').style.display = 'block';
       } catch (err) {
-        document.body.innerHTML = `<div class="card"><h1>Error</h1><p>${err.message}</p><a href="/app/projects" class="btn btn-red">Go to Projects</a></div>`;
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = '<h1>Error</h1><p></p><a href="/app/projects" class="btn btn-red">Go to Projects</a>';
+        card.querySelector('p').textContent = err.message;
+        document.body.replaceChildren(card);
       }
     });
 
@@ -70,7 +85,7 @@
       btn.disabled = true;
 
       try {
-        const res = await fetch(`/api/invites/${inviteToken}/accept`, {
+        const res = await fetch(`/api/invites/${encodeURIComponent(inviteToken)}/accept`, {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${userToken}` }
         });
@@ -83,7 +98,7 @@
         const data = await res.json();
         
 
-        window.location.href = `/app/editor?id=${data.project_id}`;
+        window.location.href = `/app/editor?id=${Number(data.project_id)}`;
       } catch (err) {
         alert(err.message);
         btn.textContent = "Accept and Enter Project";

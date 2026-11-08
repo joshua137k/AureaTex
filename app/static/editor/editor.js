@@ -93,6 +93,36 @@ function registerLatexLanguage() {
     },
   });
 
+  monaco.editor.defineTheme('joshuatex-dark', {
+    base: 'vs-dark', inherit: true,
+    rules: [
+      { token: 'comment', foreground: '6A9955', fontStyle: 'italic' },
+      { token: 'keyword', foreground: 'F47174', fontStyle: 'bold' },
+      { token: 'string', foreground: 'C4A7F5' },
+      { token: 'number', foreground: 'F0B45A' },
+      { token: 'delimiter.curly', foreground: '79B8FF', fontStyle: 'bold' },
+      { token: 'delimiter.square', foreground: '79B8FF' },
+    ],
+    colors: {
+      'editor.background': '#171A21',
+      'editor.foreground': '#E5E9F0',
+      'editorCursor.foreground': '#F05252',
+      'editor.selectionBackground': '#3A2A33',
+      'editor.lineHighlightBackground': '#1C2029',
+      'editorLineNumber.foreground': '#4B5567',
+      'editorLineNumber.activeForeground': '#F05252',
+      'editorIndentGuide.background1': '#262C38',
+      'editorWidget.background': '#1C2029',
+      'editorWidget.border': '#2A303C',
+      'editorSuggestWidget.background': '#1C2029',
+      'editorSuggestWidget.border': '#2A303C',
+      'editorSuggestWidget.selectedBackground': '#2A303D',
+      'input.background': '#222733',
+      'scrollbarSlider.background': '#3A425280',
+      'scrollbarSlider.hoverBackground': '#4B5567A0',
+    },
+  });
+
   monaco.editor.defineTheme('joshuatex-light', {
     base: 'vs', inherit: true,
     rules: [
@@ -109,6 +139,8 @@ function registerLatexLanguage() {
       'editor.selectionBackground': '#FFE8E8',
       'editorLineNumber.foreground': '#cbd5e1',
       'editorLineNumber.activeForeground': '#E03030',
+      'editor.lineHighlightBackground': '#F8FAFC',
+      'scrollbarSlider.background': '#CBD5E180',
     },
   });
 
@@ -135,10 +167,26 @@ function registerLatexLanguage() {
       return { suggestions };
     },
   });
+
+  // Packages, classes, ambientes, \cite e \ref (latex-complete.js).
+  if (typeof registerLatexArgCompletion === 'function') registerLatexArgCompletion(NOVEATEX_LATEX_LANG_ID);
 }
 
 
 
+
+function monacoThemeName() {
+  return (typeof getTheme === 'function' && getTheme() === 'dark') ? 'joshuatex-dark' : 'joshuatex-light';
+}
+
+// O tema do editor acompanha o tema da aplicação.
+window.addEventListener('themechange', () => {
+  if (typeof monaco !== 'undefined') monaco.editor.setTheme(monacoThemeName());
+  if (typeof applyPdfViewerTheme === 'function') applyPdfViewerTheme();
+});
+
+function editorUndo() { editor?.trigger('toolbar', 'undo', null); editor?.focus(); }
+function editorRedo() { editor?.trigger('toolbar', 'redo', null); editor?.focus(); }
 
 function languageForFile(filename) {
   const lower = (filename || '').toLowerCase();
@@ -152,7 +200,7 @@ function initEditor() {
 
   editor = monaco.editor.create(document.getElementById('monaco-container'), {
     model: null,
-    theme: 'joshuatex-light',
+    theme: monacoThemeName(),
     fontFamily: "'JetBrains Mono', monospace",
     fontSize: 14,
     lineHeight: 1.75,
@@ -160,7 +208,11 @@ function initEditor() {
     automaticLayout: true,
     scrollBeyondLastLine: false,
     wordWrap: 'on',
-    padding: { top: 12 },
+    padding: { top: 12, bottom: 12 },
+    renderLineHighlight: 'line',
+    smoothScrolling: true,
+    overviewRulerBorder: false,
+    scrollbar: { verticalScrollbarSize: 10, horizontalScrollbarSize: 10, useShadows: false },
   });
 
   editor.onDidChangeCursorPosition((e) => {
@@ -173,7 +225,8 @@ function initEditor() {
   });
 
   editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => compilePDF());
-  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => saveFileManual());
+  // O texto grava-se sozinho; Ctrl+S compila (como Ctrl+Enter).
+  editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => compilePDF());
 }
 
 
@@ -196,11 +249,21 @@ function insertSnippet(text) {
   editor.focus();
 }
 
-function insertTable() {
-  const rows = prompt('Number of rows:', '3');
-  const cols = prompt('Number of columns:', '3');
-  if (!rows || !cols) return;
-  const r = parseInt(rows), c = parseInt(cols);
+async function insertTable() {
+  const size = await uiForm({
+    title: 'Insert table',
+    okText: 'Insert',
+    fields: [
+      { name: 'rows', label: 'Rows', value: '3', type: 'number', min: 1, max: 100 },
+      { name: 'cols', label: 'Columns', value: '3', type: 'number', min: 1, max: 30 },
+    ],
+    validate: (v) => {
+      const r = parseInt(v.rows), c = parseInt(v.cols);
+      return r >= 1 && r <= 100 && c >= 1 && c <= 30 ? '' : 'Use 1–100 rows and 1–30 columns.';
+    },
+  });
+  if (!size) return;
+  const r = parseInt(size.rows), c = parseInt(size.cols);
   const colSpec = Array(c).fill('c').join('|');
   const header = Array(c).fill('Header').join(' & ') + ' \\\\';
   const dataRow = Array(c).fill('Data').join(' & ') + ' \\\\';
@@ -222,29 +285,6 @@ function findInEditor() {
 }
 
 
-function setupResizer() {
-  const resizer = document.getElementById('resizer');
-  const pane = document.getElementById('editorPane');
-  let dragging = false, startX = 0, startW = 0;
-
-  resizer.addEventListener('mousedown', e => {
-    dragging = true; startX = e.clientX; startW = pane.offsetWidth;
-    document.body.style.cursor = 'ew-resize';
-    document.body.style.userSelect = 'none';
-  });
-  document.addEventListener('mousemove', e => {
-    if (!dragging) return;
-    pane.style.flex = 'none';
-    pane.style.width = Math.max(250, startW + (e.clientX - startX)) + 'px';
-    editor?.layout();
-  });
-  document.addEventListener('mouseup', () => {
-    dragging = false;
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-  });
-}
-
 function setViewMode(mode, btnElement) {
   const layout = document.querySelector('.editor-layout');
   layout.classList.remove('mode-code', 'mode-pdf');
@@ -258,16 +298,27 @@ function setViewMode(mode, btnElement) {
   setTimeout(() => editor?.layout(), 50);
 }
 
-function openPDFInNewTab(btnElement) {
-  const iframe = document.getElementById('pdfPreviewIframe');
-  if (iframe.src && iframe.src !== 'about:blank') {
-    externalPdfWindow = window.open(currentPdfUrl || iframe.src, 'JoshuaTeX_PDF');
-    const codeBtn = document.querySelector('#viewModeGroup button[title="View: Code Only"]');
-    setViewMode('code', codeBtn);
-  } else {
+function openPDFInNewTab() {
+  if (!currentPdfUrl) {
     alert('Compile the project first to generate the PDF.');
+    return;
   }
+
+  externalPdfWindow = window.open(
+    '/static/pdfjs/web/viewer.html?file=' + encodeURIComponent(currentPdfUrl) + '#view=FitH',
+    'AureaTeX_PDF'
+  );
+  setViewMode('code', document.querySelector('#viewModeGroup button[data-mode="code"]'));
 }
+
+// Ctrl/Cmd+S em qualquer sítio da página compila em vez de abrir o
+// "Guardar página" do browser.
+window.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 's') {
+    e.preventDefault();
+    if (typeof compilePDF === 'function') compilePDF();
+  }
+});
 
 let _errorHighlightDecorations = [];
 

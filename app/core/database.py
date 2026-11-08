@@ -17,7 +17,11 @@ async def get_pool() -> aiomysql.Pool:
             autocommit=False,
             charset="utf8mb4",
             minsize=1,
-            maxsize=10,
+            maxsize=20,
+            pool_recycle=3600,
+            # READ COMMITTED: um pedido vê sempre o que o collab acabou de
+            # gravar noutra ligação (com REPEATABLE READ lia dados antigos).
+            init_command="SET SESSION TRANSACTION ISOLATION LEVEL READ COMMITTED",
         )
     return _pool
 

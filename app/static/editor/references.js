@@ -11,14 +11,9 @@ function switchRefTab(tab, el) {
   ['search', 'doi', 'zotero', 'manual'].forEach(t => {
     document.getElementById(`refTab-${t}`).style.display = 'none';
   });
-  document.querySelectorAll('.ref-tab').forEach(b => {
-    b.style.borderBottomColor = 'transparent';
-    b.style.color = '#888';
-  });
-  const panel = document.getElementById(`refTab-${tab}`);
-  panel.style.display       = 'flex';
-  panel.style.flexDirection = 'column';
-  if (el) { el.style.borderBottomColor = '#E03030'; el.style.color = '#E03030'; }
+  document.querySelectorAll('.ref-tab').forEach(b => b.classList.remove('active'));
+  document.getElementById(`refTab-${tab}`).style.display = 'flex';
+  if (el) el.classList.add('active');
 }
 
 
@@ -28,47 +23,48 @@ async function searchRefs() {
   const results = document.getElementById('refSearchResults');
   if (!q) return;
 
-  results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Searching...</div>';
+  results.innerHTML = '<div class="ref-placeholder">Searching…</div>';
   try {
     const res = await fetch(
       `/api/references/search?q=${encodeURIComponent(q)}&source=${source}&limit=20`,
       { headers: { 'Authorization': `Bearer ${token}` } }
     );
-    if (!res.ok) throw new Error('Search error');
+    if (!res.ok) throw new Error(await apiError(res, 'Search error'));
     const items = await res.json();
 
     if (!items.length) {
-      results.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">No results.</div>';
+      results.innerHTML = '<div class="ref-placeholder">No results.</div>';
       return;
     }
 
     window._searchResults = items;
     results.innerHTML = items.map((item, i) => {
-      const authors  = (item.authors || []).slice(0, 3).join('; ') + (item.authors?.length > 3 ? ' et al.' : '');
-      const typeIcon = item.type?.includes('journal') ? '📄' : item.type?.includes('book') ? '📚' : '📑';
+      const authors  = escapeHtml((item.authors || []).slice(0, 3).join('; ') + (item.authors?.length > 3 ? ' et al.' : ''));
+      const typeLabel = item.type?.includes('journal') ? 'Article' : item.type?.includes('book') ? 'Book'
+        : item.type?.includes('proceedings') ? 'Conference' : '';
       return `
-        <label style="display:flex;align-items:flex-start;gap:0.8rem;padding:0.55rem 1rem;border-bottom:1px solid #f0f0f0;cursor:pointer;"
-          onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
-          <input type="checkbox" onchange="toggleRefItem(this, ${i})"
-            style="margin-top:3px;flex-shrink:0;accent-color:#E03030;">
-          <div style="flex:1;min-width:0;">
-            <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${typeIcon} ${item.title || 'Untitled'}</div>
-            <div style="font-size:0.73rem;color:#666;">
-              ${authors}${item.year ? ` · ${item.year}` : ''}${item.source ? ` · <em>${item.source}</em>` : ''}
+        <label class="ref-item">
+          <input type="checkbox" onchange="toggleRefItem(this, ${i}, 'search')">
+          <div class="ref-item-body">
+            <div class="ref-item-title">${typeLabel ? `<span class="ref-type">${typeLabel}</span>` : ''}${escapeHtml(item.title || 'Untitled')}</div>
+            <div class="ref-item-meta">
+              ${authors}${item.year ? ` · ${escapeHtml(item.year)}` : ''}${item.source ? ` · <em>${escapeHtml(item.source)}</em>` : ''}
             </div>
-            ${item.doi ? `<div style="font-size:0.7rem;color:#2563EB;font-family:'JetBrains Mono',monospace;">DOI: ${item.doi}</div>` : ''}
+            ${item.doi ? `<div class="ref-item-doi">DOI: ${escapeHtml(item.doi)}</div>` : ''}
           </div>
         </label>
       `;
     }).join('');
 
   } catch (err) {
-    results.innerHTML = `<div style="text-align:center;padding:2rem;color:#E03030;">${err.message}</div>`;
+    results.innerHTML = `<div class="ref-placeholder error">${escapeHtml(err.message)}</div>`;
   }
 }
 
-function toggleRefItem(checkbox, index) {
-  const item = window._searchResults?.[index] ?? window._zoteroResults?.[index];
+function toggleRefItem(checkbox, index, source) {
+  // O índice refere-se à lista que está no ecrã (a do Zotero pode estar filtrada).
+  const list = source === 'zotero' ? zoteroFiltered : window._searchResults;
+  const item = list?.[index];
   if (!item) return;
   if (checkbox.checked) refsSelected.push(item);
   else refsSelected = refsSelected.filter(r => r !== item);
@@ -82,7 +78,7 @@ function updateRefsFooter() {
 
 
 async function resolveDoi() {
-  const doi    = document.getElementById('doiInput').value.trim().replace('https://doi.org/', '');
+  const doi    = document.getElementById('doiInput').value.trim().replace(/^https?:\/\/(dx\.)?doi\.org\//i, '').replace(/^doi:\s*/i, '');
   const result = document.getElementById('doiResult');
   const addBtn = document.getElementById('doiAddBtn');
   if (!doi) return;
@@ -92,13 +88,13 @@ async function resolveDoi() {
   doiRawItem = null;
 
   try {
-    const res = await fetch(`/api/references/doi/${encodeURIComponent(doi)}`, {
+    const res = await fetch(`/api/references/doi/${encPath(doi)}`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('DOI not found.');
+    if (!res.ok) throw new Error(await apiError(res, 'DOI not found.'));
     doiRawItem           = await res.json();
     result.textContent   = doiRawItem.bibtex;
-    addBtn.style.display = 'block';
+    addBtn.style.display = 'inline-flex';
   } catch (err) {
     result.textContent = '! ' + err.message;
   }
@@ -133,7 +129,7 @@ async function connectZotero() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body   : JSON.stringify({ user_id: userId, api_key: apiKey })
     });
-    if (!res.ok) { const e = await res.json(); throw new Error(e.detail); }
+    if (!res.ok) throw new Error(await apiError(res, 'Could not connect to Zotero.'));
     document.getElementById('zoteroNotConnected').style.display = 'none';
     document.getElementById('zoteroConnected').style.display    = 'flex';
     await loadZoteroRefs();
@@ -142,26 +138,26 @@ async function connectZotero() {
 
 async function loadZoteroRefs() {
   const list = document.getElementById('zoteroRefList');
-  list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Loading library...</div>';
+  list.innerHTML = '<div class="ref-placeholder">Loading library…</div>';
   try {
     const res = await fetch('/api/references/zotero', {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Error loading Zotero');
-    zoteroAllRefs          = await res.json();
+    if (!res.ok) throw new Error(await apiError(res, 'Error loading Zotero'));
+    zoteroAllRefs          = (await res.json()).map(r => ({ ...r, _raw_source: 'zotero' }));
     zoteroFiltered         = [...zoteroAllRefs];
     window._zoteroResults  = zoteroAllRefs;
     renderZoteroRefs();
   } catch (err) {
-    list.innerHTML = `<div style="text-align:center;padding:2rem;color:#E03030;">${err.message}</div>`;
+    list.innerHTML = `<div class="ref-placeholder error">${escapeHtml(err.message)}</div>`;
   }
 }
 
 function filterZoteroRefs() {
   const q = document.getElementById('zoteroFilter').value.toLowerCase();
   zoteroFiltered = zoteroAllRefs.filter(r =>
-    r.title.toLowerCase().includes(q) ||
-    r.authors.some(a => a.toLowerCase().includes(q)) ||
+    (r.title || '').toLowerCase().includes(q) ||
+    (r.authors || []).some(a => a.toLowerCase().includes(q)) ||
     (r.source || '').toLowerCase().includes(q)
   );
   renderZoteroRefs();
@@ -170,20 +166,19 @@ function filterZoteroRefs() {
 function renderZoteroRefs() {
   const list = document.getElementById('zoteroRefList');
   if (!zoteroFiltered.length) {
-    list.innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">No results.</div>';
+    list.innerHTML = '<div class="ref-placeholder">No results.</div>';
     return;
   }
   list.innerHTML = zoteroFiltered.map((ref, i) => {
-    const authors = ref.authors.slice(0, 3).join('; ') + (ref.authors.length > 3 ? ' et al.' : '');
+    const authors = escapeHtml((ref.authors || []).slice(0, 3).join('; ') + ((ref.authors || []).length > 3 ? ' et al.' : ''));
+    const checked = refsSelected.includes(ref) ? 'checked' : '';
     return `
-      <label style="display:flex;align-items:flex-start;gap:0.8rem;padding:0.55rem 1rem;border-bottom:1px solid #f0f0f0;cursor:pointer;"
-        onmouseover="this.style.background='#fafafa'" onmouseout="this.style.background=''">
-        <input type="checkbox" onchange="toggleRefItem(this, ${i})"
-          style="margin-top:3px;flex-shrink:0;accent-color:#E03030;">
-        <div style="flex:1;min-width:0;">
-          <div style="font-weight:700;font-size:0.82rem;color:#111;margin-bottom:2px;">${ref.title || 'Untitled'}</div>
-          <div style="font-size:0.73rem;color:#666;">
-            ${authors}${ref.year ? ` · ${ref.year}` : ''}${ref.source ? ` · <em>${ref.source}</em>` : ''}
+      <label class="ref-item">
+        <input type="checkbox" ${checked} onchange="toggleRefItem(this, ${i}, 'zotero')">
+        <div class="ref-item-body">
+          <div class="ref-item-title">${escapeHtml(ref.title || 'Untitled')}</div>
+          <div class="ref-item-meta">
+            ${authors}${ref.year ? ` · ${escapeHtml(ref.year)}` : ''}${ref.source ? ` · <em>${escapeHtml(ref.source)}</em>` : ''}
           </div>
         </div>
       </label>
@@ -214,11 +209,12 @@ async function _exportToBib(items) {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body   : JSON.stringify({ items })
     });
+    if (!res.ok) throw new Error(await apiError(res, 'Error exporting references.'));
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail);
     log.className   = 'log-box success';
     log.textContent = `✓ ${data.message}`;
     refsSelected = [];
+    document.querySelectorAll('#refsModal input[type="checkbox"]').forEach(c => c.checked = false);
     updateRefsFooter();
     await _reloadBibFile();
     closeRefsModal();
@@ -231,35 +227,26 @@ async function _exportToBib(items) {
 async function _appendRawBib(rawBibtex) {
   const log = document.getElementById('logBox');
   try {
-    let current = '';
-    if (typeof openModels !== 'undefined' && openModels.has('refs.bib')) {
-      current = openModels.get('refs.bib').getValue();
-    } else {
-      const getRes = await fetch(`/api/projects/${projectId}/files/refs.bib`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      if (getRes.ok) {
-        const d = await getRes.json();
-        current = d.content || '';
-      }
-    }
-    
-    const newContent = current ? current.trimEnd() + '\n\n' + rawBibtex : rawBibtex;
-
-    await fetch(`/api/projects/${projectId}/files/refs.bib`, {
-      method : 'PUT',
+    // É o servidor que acrescenta ao refs.bib atual. Antes o browser enviava o
+    // ficheiro inteiro a partir da sua cópia local, que podia estar
+    // desatualizada e apagava entradas adicionadas entretanto.
+    const res = await fetch(`/api/references/append-bib/${projectId}`, {
+      method : 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body   : JSON.stringify({ content: newContent })
+      body   : JSON.stringify({ bibtex: rawBibtex })
     });
+    if (!res.ok) throw new Error(await apiError(res, 'Could not add the entry.'));
+    const data = await res.json();
 
-    log.className   = 'log-box success';
-    log.textContent = '✓ Entry added to refs.bib';
+    log.className   = data.status === 'skipped' ? 'log-box error' : 'log-box success';
+    log.textContent = (data.status === 'skipped' ? '! ' : '✓ ') + data.message;
     document.getElementById('manualBibInput').value = '';
     await _reloadBibFile();
     closeRefsModal();
   } catch (err) {
     log.className   = 'log-box error';
     log.textContent = '! Error: ' + err.message;
+    alert(err.message);
   }
 }
 

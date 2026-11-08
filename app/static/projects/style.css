@@ -1169,3 +1169,253 @@ body {
 .empty p {
     color: #777;
 }
+/* === Tema escuro === */
+.theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--gray-border, #e2e8f0);
+    border-radius: 8px;
+    background: var(--white);
+    color: var(--black);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.theme-toggle:hover { border-color: var(--black); }
+.theme-toggle svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.theme-toggle .icon-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .icon-sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .icon-moon { display: none; }
+
+.header-actions { display: flex; align-items: center; gap: .6rem; }
+
+:root[data-theme="dark"] {
+    --red: #f05252;
+    --red-hover: #dc2626;
+    --black: #e5e9f0;
+    --white: #171a21;
+    --gray: #111318;
+    --gray2: #222733;
+    --gray-border: #2a303c;
+    --text-muted: #9aa5b8;
+    --red-light: rgba(240, 82, 82, .14);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, .35), 0 2px 4px -2px rgba(0, 0, 0, .3);
+    --shadow-md: 0 10px 15px -3px rgba(0, 0, 0, .45), 0 4px 6px -4px rgba(0, 0, 0, .4);
+}
+
+/* Texto sobre fundos coloridos continua branco. */
+:root[data-theme="dark"] .btn-red,
+:root[data-theme="dark"] .avatar,
+:root[data-theme="dark"] .profile-avatar,
+:root[data-theme="dark"] .tag.red.active,
+:root[data-theme="dark"] .tag.red:hover,
+:root[data-theme="dark"] .template-item.selected,
+:root[data-theme="dark"] .template-item:hover { color: #fff; }
+
+:root[data-theme="dark"] .sidebar-divider { background: var(--gray-border); }
+:root[data-theme="dark"] .view-toggle-btn.active { background: #333a49; color: var(--black); }
+:root[data-theme="dark"] .nav-item.active { background: var(--gray2); }
+:root[data-theme="dark"] .table-header { background: #1c2029 !important; }
+:root[data-theme="dark"] .projects-grid.view-list .card:hover { background: #1c2029 !important; }
+:root[data-theme="dark"] .card-new { border-color: #3a4252; }
+:root[data-theme="dark"] .card-actions { background: #1c2029; }
+:root[data-theme="dark"] .card-preview,
+:root[data-theme="dark"] .card-preview-placeholder { background: #1c2029; }
+:root[data-theme="dark"] .card:hover .card-preview { background: #222733; }
+:root[data-theme="dark"] .mini-paper { background: #262c38; border-color: #3a4252; }
+:root[data-theme="dark"] .mini-line { background: #3a4252; }
+:root[data-theme="dark"] .mini-line.header { background: #55607a; }
+:root[data-theme="dark"] .badge-viewer { background: #222733; color: #9aa5b8; border-color: #3a4252; }
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] select { color: var(--black); background-color: var(--gray2); }
+:root[data-theme="dark"] input::placeholder { color: #6b7588; }
+:root[data-theme="dark"] .modal-overlay { background: rgba(0, 0, 0, .6); }
+
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .field select,
+:root[data-theme="dark"] .modal select,
+:root[data-theme="dark"] .modal input,
+:root[data-theme="dark"] .template-item:not(.selected):not(:hover),
+:root[data-theme="dark"] .modal { border-color: #3a4252 !important; }
+
+/* ---------------------------------------------------------------------------
+   AI connection (MCP)
+   --------------------------------------------------------------------------- */
+.modal.mcp-modal { max-width: 720px; max-height: 90vh; overflow-y: auto; padding: 1.75rem; }
+.mcp-title { font-size: 1.25rem; font-weight: 900; margin-bottom: .5rem; }
+.mcp-lead { font-size: .85rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 1.25rem; }
+.mcp-create {
+    display: grid;
+    grid-template-columns: minmax(150px, 2fr) minmax(170px, 1.3fr) minmax(130px, 1fr) auto;
+    gap: .6rem;
+    align-items: end;
+}
+.mcp-create .field { margin-bottom: 0; min-width: 0; }
+/* Mesma altura para campo, selects e botão. */
+.mcp-create input, .mcp-create .xsel-btn, .mcp-create .btn {
+    height: 48px;
+    box-sizing: border-box;
+}
+.mcp-create .btn { white-space: nowrap; padding-top: 0; padding-bottom: 0; }
+@media (max-width: 640px) {
+    .mcp-create { grid-template-columns: 1fr 1fr; }
+    .mcp-create .field:first-child, .mcp-create .btn { grid-column: 1 / -1; }
+}
+.mcp-error { color: var(--red); font-size: .8rem; font-weight: 600; min-height: 1.1rem; margin-top: .4rem; }
+.mcp-new { border: 2px solid var(--red); background: var(--red-light); border-radius: var(--radius-sm); padding: 1rem; margin: .5rem 0 1rem; }
+.mcp-new-head { font-size: .85rem; margin-bottom: .6rem; }
+.mcp-code-row { display: flex; gap: .5rem; align-items: flex-start; }
+.mcp-code-row code, .mcp-code-row pre {
+    flex: 1; min-width: 0; margin: 0; padding: .55rem .7rem;
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .74rem;
+    background: var(--white); border: 1px solid var(--gray-border); border-radius: 6px;
+    white-space: pre-wrap; word-break: break-all; color: var(--black);
+}
+.mcp-copy { padding: .45rem .8rem !important; font-size: .75rem !important; flex-shrink: 0; }
+.mcp-tabs { display: flex; gap: .3rem; margin: 1rem 0 .5rem; flex-wrap: wrap; }
+.mcp-tabs button {
+    padding: .35rem .7rem; font-size: .75rem; font-weight: 700; border-radius: 6px;
+    border: 1px solid var(--gray-border); background: var(--white); color: var(--text-muted); cursor: pointer;
+}
+.mcp-tabs button.active { background: var(--black); color: var(--white); border-color: var(--black); }
+.mcp-snippet p { font-size: .78rem; color: var(--text-muted); margin-bottom: .4rem; }
+.mcp-warn { font-size: .75rem; color: var(--text-muted); margin-top: .8rem; }
+.mcp-sub { font-size: .8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin: 1.25rem 0 .6rem; }
+.mcp-list { display: flex; flex-direction: column; gap: .5rem; }
+.mcp-row {
+    display: grid; grid-template-columns: 1fr auto; gap: .2rem .8rem; align-items: center;
+    padding: .7rem .8rem; border: 1px solid var(--gray-border); border-radius: var(--radius-sm); background: var(--gray);
+}
+.mcp-row-main { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-size: .88rem; }
+.mcp-row-meta { grid-column: 1; font-size: .72rem; color: var(--text-muted); }
+.mcp-revoke { grid-column: 2; grid-row: 1 / span 2; padding: .35rem .8rem !important; font-size: .75rem !important; }
+.mcp-badge { font-size: .66rem; font-weight: 700; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--gray-border); color: var(--text-muted); }
+.mcp-badge.write { border-color: var(--red); color: var(--red); }
+.mcp-badge.expired { background: var(--black); color: var(--white); border-color: var(--black); }
+.mcp-empty { font-size: .82rem; color: var(--text-muted); padding: .4rem 0; }
+@media (max-width: 560px) {
+    .mcp-row { grid-template-columns: 1fr; }
+    .mcp-revoke { grid-column: 1; grid-row: auto; justify-self: start; }
+}
+
+/* ---------------------------------------------------------------------------
+   Barra lateral fixa: o perfil fica sempre visível em baixo, mesmo com
+   muitos projetos (a lista de projetos é que faz scroll).
+   --------------------------------------------------------------------------- */
+.sidebar {
+    position: sticky;
+    top: 64px;
+    align-self: flex-start;
+    height: calc(100vh - 64px);
+    overflow-y: auto;
+}
+
+/* ---------------------------------------------------------------------------
+   Select próprio (select.js) — segue o tema claro/escuro
+   --------------------------------------------------------------------------- */
+.xsel { position: relative; width: 100%; }
+.xsel-native {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+}
+.xsel-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+    width: 100%;
+    padding: .7rem 1rem;
+    border: 3px solid var(--black);
+    background: var(--gray);
+    color: var(--black);
+    font-family: "Space Grotesk", sans-serif;
+    font-size: .95rem;
+    text-align: left;
+    cursor: pointer;
+}
+.xsel-btn:focus-visible, .xsel.open .xsel-btn { background: var(--red-light); outline: none; }
+.xsel-btn:disabled { opacity: .55; cursor: default; }
+.xsel-btn.placeholder .xsel-label { color: var(--text-muted); }
+.xsel-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.xsel-btn svg {
+    width: 16px; height: 16px; flex-shrink: 0;
+    fill: none; stroke: currentColor; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round;
+    transition: transform .15s;
+}
+.xsel.open .xsel-btn svg { transform: rotate(180deg); }
+.xsel-list {
+    display: none;
+    position: absolute;
+    left: 0;
+    min-width: 100%;
+    width: max-content;
+    max-width: min(420px, 90vw);
+    top: calc(100% + 4px);
+    z-index: 400;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: .3rem;
+    background: var(--white);
+    border: 2px solid var(--black);
+    border-radius: 6px;
+    box-shadow: var(--shadow-md);
+}
+.xsel.up .xsel-list { top: auto; bottom: calc(100% + 4px); }
+.xsel.open .xsel-list { display: block; }
+.xsel-opt {
+    padding: .5rem .7rem;
+    border-radius: 4px;
+    font-size: .9rem;
+    color: var(--black);
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.xsel-opt.active { background: var(--red-light); }
+.xsel-opt[aria-selected="true"] { font-weight: 700; color: var(--red); }
+.xsel-opt[aria-disabled="true"] { color: var(--text-muted); cursor: default; background: none; }
+
+/* ---------------------------------------------------------------------------
+   Descarregar PDF / ZIP nos cartões e na lista
+   --------------------------------------------------------------------------- */
+.card-actions-right { display: flex; align-items: center; gap: .15rem; margin-left: auto; }
+.btn-dl {
+    display: inline-flex;
+    align-items: center;
+    gap: .25rem;
+    padding: 4px 7px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: .72rem;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color .15s ease, background .15s ease;
+}
+.btn-dl svg { fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.btn-dl:hover { color: var(--black); background: var(--gray); }
+.btn-dl.busy { color: var(--red); cursor: progress; }
+.btn-dl:disabled { opacity: 1; }
+
+/* Select próprio no tema escuro: mesma borda e fundo que os outros campos. */
+:root[data-theme="dark"] .xsel-btn { border-color: #3a4252; background-color: var(--gray2); }
+:root[data-theme="dark"] .xsel-list { border-color: #3a4252; }
+:root[data-theme="dark"] .xsel.open .xsel-btn,
+:root[data-theme="dark"] .xsel-btn:focus-visible { border-color: var(--red); }
+
+/* Ícones dos templates (SVG em vez de emojis) */
+.template-icon .ico {
+    display: block; width: 26px; height: 26px; margin: 0 auto;
+    fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}

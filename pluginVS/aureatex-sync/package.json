@@ -2,11 +2,13 @@
   "name": "aureatex-sync",
   "displayName": "AureaTeX Sync",
   "description": "Sincronização e Compilação para AureaTeX",
-  "version": "0.0.1",
+  "version": "0.1.1",
   "engines": {
     "vscode": "^1.80.0"
   },
-  "categories": ["Other"],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
@@ -14,6 +16,14 @@
       {
         "command": "aureatex.sync",
         "title": "AureaTeX: Sincronizar Projeto (Push/Pull)"
+      },
+      {
+        "command": "aureatex.setPassword",
+        "title": "AureaTeX: Definir Password (guardada em segurança)"
+      },
+      {
+        "command": "aureatex.logout",
+        "title": "AureaTeX: Esquecer credenciais guardadas"
       }
     ],
     "keybindings": [
@@ -28,8 +38,8 @@
       "properties": {
         "aureatex.apiUrl": {
           "type": "string",
-          "default": "http://100.103.241.42:8111",
-          "description": "O URL do teu servidor AureaTeX"
+          "default": "https://aurea.joshuadourado.pt",
+          "description": "O URL do teu servidor AureaTeX (ex.: https://aurea.exemplo.pt)"
         },
         "aureatex.username": {
           "type": "string",
@@ -39,7 +49,7 @@
         "aureatex.password": {
           "type": "string",
           "default": "",
-          "description": "A tua password do AureaTeX"
+          "description": "(Opcional) Password em texto simples. Recomendado: deixa vazio e usa o comando \"AureaTeX: Definir Password\", que a guarda no cofre do VS Code."
         }
       }
     }

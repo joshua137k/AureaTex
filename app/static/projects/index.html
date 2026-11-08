@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="/static/theme.js"></script>
+  <script src="/static/dialog.js"></script>
+  <script src="/static/select.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AureoTeX - Projects</title>
+<title>AureaTeX - Projects</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/projects/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
@@ -18,10 +21,14 @@
       <rect width="28" height="28" fill="#E03030"/>
       <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/>
     </svg>
-    Aureo<span>TeX</span>
+    Aurea<span>TeX</span>
   </a>
 
   <div class="header-actions">
+    <button class="theme-toggle" onclick="toggleTheme()" title="Switch light / dark theme" aria-label="Switch theme">
+      <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+    </button>
     <button class="btn btn-red" onclick="openNewModal()">
       <svg width="14" height="14" viewBox="0 0 24 24" stroke="white" fill="none" stroke-width="3"><path d="M12 5v14M5 12h14"/></svg>
       New Project
@@ -55,6 +62,10 @@
       <a class="nav-item" href="#" onclick="alert('References can be configured in the Zotero panel inside the editor.')">
         <svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         Zotero & refs.bib
+      </a>
+      <a class="nav-item" href="#" onclick="event.preventDefault(); openMcpModal()">
+        <svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/></svg>
+        AI connection (MCP)
       </a>
     </div>
   </div>
@@ -92,7 +103,7 @@
   <div class="content-toolbar">
     <div class="search-box">
       <svg class="search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-      <input type="text" placeholder="Search my projects..." id="searchInput" oninput="filterProjectsLocally()">
+      <input type="search" name="project-search" placeholder="Search my projects..." id="searchInput" oninput="filterProjectsLocally()" autocomplete="off" spellcheck="false">
     </div>
 
     <div class="filter-tabs">
@@ -143,11 +154,11 @@
     <div id="modal-content-template">
       <div class="field">
         <label>Project Name</label>
-        <input type="text" id="newProjectName" placeholder="e.g. Master's Thesis 2026">
+        <input type="text" id="newProjectName" name="project-name" placeholder="e.g. Master's Thesis 2026" autocomplete="off">
       </div>
       <div class="field">
         <label>Where do you want to store the code (Git)?</label>
-        <select id="newProjectProvider" style="width:100%; padding:0.6rem; border:2px solid var(--black); font-family: 'Space Grotesk', sans-serif; border-radius: 4px; font-weight: 500;">
+        <select id="newProjectProvider">
           <option value="gitea">Gitea (Local Server)</option>
           <option value="github">GitHub</option>
         </select>
@@ -155,10 +166,10 @@
       <div class="field">
         <label>Select a Template</label>
         <div class="template-grid">
-          <div class="template-item selected" onclick="selectTemplate(this,'blank')"><div class="template-icon">📄</div>Blank</div>
-          <div class="template-item" onclick="selectTemplate(this,'article')"><div class="template-icon">📰</div>Article</div>
-          <div class="template-item" onclick="selectTemplate(this,'thesis')"><div class="template-icon">📚</div>Thesis</div>
-          <div class="template-item" onclick="selectTemplate(this,'beamer')"><div class="template-icon">📊</div>Beamer</div>
+          <div class="template-item selected" onclick="selectTemplate(this,'blank')"><div class="template-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>Blank</div>
+          <div class="template-item" onclick="selectTemplate(this,'article')"><div class="template-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></div>Article</div>
+          <div class="template-item" onclick="selectTemplate(this,'thesis')"><div class="template-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>Thesis</div>
+          <div class="template-item" onclick="selectTemplate(this,'beamer')"><div class="template-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>Beamer</div>
         </div>
       </div>
       <div class="modal-actions">
@@ -183,7 +194,7 @@
       <div id="github-repo-linked" style="display: none;">
           <div class="field">
             <label>Select a Repository to Clone</label>
-            <select id="githubRepoSelect" style="width:100%; padding:0.6rem; border:2px solid var(--black); font-family: 'Space Grotesk', sans-serif; border-radius: 4px; font-weight: 500;">
+            <select id="githubRepoSelect">
               <option value="">Loading repositories...</option>
             </select>
           </div>
@@ -195,7 +206,7 @@
       
       <div id="github-repo-unlinked" style="text-align: center; padding: 2rem; display:none;">
         <svg viewBox="0 0 24 24" width="48" height="48" fill="#ccc" style="margin-bottom:1rem;"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.5-1.4-1.3-1.8-1.3-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.7.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3Z"/></svg>
-        <p style="margin-bottom: 1rem; font-weight: 600; color: #555;">You need to link your GitHub account first.</p>
+        <p style="margin-bottom: 1rem; font-weight: 600; color: var(--text-muted);">You need to link your GitHub account first.</p>
         <button class="btn btn-black" onclick="closeNewModal(); openSettingsModal()">Go to Settings</button>
       </div>
     </div>
@@ -205,12 +216,12 @@
 
 <div class="modal-overlay" id="settingsModal" onclick="closeModal(event)">
   <div class="modal" style="max-width: 450px;">
-    <h2 style="font-size: 1.25rem; font-weight: 900; margin-bottom: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem;">Account Settings</h2>
+    <h2 style="font-size: 1.25rem; font-weight: 900; margin-bottom: 1.5rem; border-bottom: 2px solid var(--gray-border); padding-bottom: 0.5rem;">Account Settings</h2>
     
     <div style="margin-bottom: 2rem;">
       <h3 style="font-size: 0.9rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; margin-bottom: 1rem;">Code Integrations (Git)</h3>
       
-      <div style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+      <div style="background: var(--gray); border: 2px dashed var(--gray-border); padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
         <div style="display:flex; flex-direction:column; gap:0.2rem;">
           <span style="font-weight: 800; font-size: 0.9rem;">Gitea</span>
           <span id="giteaStatusText" style="font-size: 0.75rem; font-weight: 600;">Loading...</span>
@@ -218,7 +229,7 @@
         <button id="btnLinkGitea" class="btn btn-black" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" onclick="linkGit('gitea')">Link Gitea</button>
       </div>
 
-      <div style="background: #f8fafc; border: 2px dashed #cbd5e1; padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="background: var(--gray); border: 2px dashed var(--gray-border); padding: 1rem; border-radius: 6px; display: flex; align-items: center; justify-content: space-between;">
         <div style="display:flex; flex-direction:column; gap:0.2rem;">
           <span style="font-weight: 800; font-size: 0.9rem;">GitHub</span>
           <span id="githubStatusText" style="font-size: 0.75rem; font-weight: 600;">Loading...</span>
@@ -233,34 +244,144 @@
       <div id="pwError" style="display:none; color: white; background: var(--red); padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;"></div>
       <div id="pwSuccess" style="display:none; color: white; background: #16A34A; padding: 0.5rem; border-radius: 4px; font-size: 0.8rem; font-weight: 600; margin-bottom: 1rem;"></div>
 
+      <input type="text" id="pwUsername" name="username" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
       <div class="field" id="oldPasswordField">
         <label>Current Password</label>
-        <input type="password" id="oldPassword" placeholder="••••••••">
+        <input type="password" id="oldPassword" placeholder="••••••••" autocomplete="current-password">
       </div>
       <div class="field">
         <label>New Password</label>
-        <input type="password" id="newPassword" placeholder="Minimum 6 characters">
+        <input type="password" id="newPassword" placeholder="Minimum 10 characters" autocomplete="new-password">
       </div>
       
       <button class="btn btn-red" id="btnUpdatePw" onclick="updatePassword()" style="width: 100%;">Update Password</button>
+      <button class="btn btn-white" onclick="logoutEverywhere()" style="width: 100%; margin-top: .6rem;" title="Ends every other session (other browsers, the VS Code plugin until it logs in again)">Sign out of all other devices</button>
     </div>
-    
-    <div class="modal-actions" style="margin-top: 2rem; border-top: 1px solid #eee; padding-top: 1rem;">
+
+    <div class="modal-actions" style="margin-top: 2rem; border-top: 1px solid var(--gray-border); padding-top: 1rem;">
       <button class="btn btn-white" style="width: 100%; text-align: center;" onclick="closeSettingsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ligação de clientes de IA por MCP -->
+<div class="modal-overlay" id="mcpModal" onclick="closeModal(event)">
+  <div class="modal mcp-modal">
+    <h2 class="mcp-title">AI connection (MCP)</h2>
+    <p class="mcp-lead">
+      Let an AI assistant (Claude Code, Claude Desktop, Cursor, VS Code…) read your projects, edit files and compile —
+      using the <strong>Model Context Protocol</strong>. Create a token, then paste the command or config below into your AI tool.
+    </p>
+
+    <div class="mcp-create">
+      <div class="field" style="flex: 2;">
+        <label for="mcpName">Name</label>
+        <input id="mcpName" maxlength="100" placeholder="e.g. Claude on my laptop">
+      </div>
+      <div class="field">
+        <label for="mcpScope">Access</label>
+        <select id="mcpScope">
+          <option value="read">Read only</option>
+          <option value="write">Read + edit + compile</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="mcpExpiry">Expires</label>
+        <select id="mcpExpiry">
+          <option value="30">30 days</option>
+          <option value="90" selected>90 days</option>
+          <option value="365">1 year</option>
+        </select>
+      </div>
+      <button class="btn btn-black" onclick="createMcpToken()" id="mcpCreateBtn">Create token</button>
+    </div>
+    <div id="mcpError" class="mcp-error"></div>
+
+    <div id="mcpNew" class="mcp-new" hidden>
+      <div class="mcp-new-head">
+        <strong>Copy your token now — it won't be shown again.</strong>
+      </div>
+      <div class="mcp-code-row">
+        <code id="mcpTokenValue"></code>
+        <button class="btn btn-white mcp-copy" data-copy="mcpTokenValue">Copy</button>
+      </div>
+
+      <div class="mcp-tabs" role="tablist">
+        <button class="active" data-tab="claude-code">Claude Code</button>
+        <button data-tab="json">Cursor / VS Code</button>
+        <button data-tab="desktop">Claude Desktop</button>
+        <button data-tab="opencode">opencode</button>
+        <button data-tab="antigravity">Antigravity</button>
+      </div>
+      <div class="mcp-snippet" data-panel="claude-code">
+        <p>Run in a terminal:</p>
+        <div class="mcp-code-row"><pre id="mcpSnipCC"></pre><button class="btn btn-white mcp-copy" data-copy="mcpSnipCC">Copy</button></div>
+      </div>
+      <div class="mcp-snippet" data-panel="json" hidden>
+        <p>Add to <code>.cursor/mcp.json</code> or VS Code <code>.vscode/mcp.json</code> (VS Code uses <code>"servers"</code> instead of <code>"mcpServers"</code>):</p>
+        <div class="mcp-code-row"><pre id="mcpSnipJson"></pre><button class="btn btn-white mcp-copy" data-copy="mcpSnipJson">Copy</button></div>
+      </div>
+      <div class="mcp-snippet" data-panel="desktop" hidden>
+        <p>Claude Desktop → Settings → Developer → Edit config (needs Node.js; uses <code>mcp-remote</code>):</p>
+        <div class="mcp-code-row"><pre id="mcpSnipDesktop"></pre><button class="btn btn-white mcp-copy" data-copy="mcpSnipDesktop">Copy</button></div>
+      </div>
+      <div class="mcp-snippet" data-panel="opencode" hidden>
+        <p>Add to <code>opencode.json</code> (in the project, or <code>~/.config/opencode/opencode.json</code> for all projects):</p>
+        <div class="mcp-code-row"><pre id="mcpSnipOpencode"></pre><button class="btn btn-white mcp-copy" data-copy="mcpSnipOpencode">Copy</button></div>
+      </div>
+      <div class="mcp-snippet" data-panel="antigravity" hidden>
+        <p>Agent panel → <strong>⋯</strong> → <strong>MCP Servers</strong> → <strong>Manage MCP Servers</strong> → <strong>View raw config</strong>, then add (needs Node.js):</p>
+        <div class="mcp-code-row"><pre id="mcpSnipAntigravity"></pre><button class="btn btn-white mcp-copy" data-copy="mcpSnipAntigravity">Copy</button></div>
+      </div>
+      <p class="mcp-warn">Treat the token like a password: anyone with it can use your projects with the access you chose. Revoke it below if it leaks.</p>
+    </div>
+
+    <h3 class="mcp-sub">Your tokens</h3>
+    <div id="mcpList" class="mcp-list"><div class="mcp-empty">Loading…</div></div>
+
+    <div class="modal-actions" style="margin-top: 1.5rem;">
+      <button class="btn btn-white" style="width: 100%;" onclick="closeMcpModal()">Close</button>
     </div>
   </div>
 </div>
 
 
 <script>
-const urlParams = new URLSearchParams(window.location.search);
-if (urlParams.has('token')) {
-  localStorage.setItem('Joshuatex_token', urlParams.get('token'));
+// Depois do login com Gitea/GitHub o token chega no fragmento (#token=...),
+// que nunca é enviado a servidores nem fica em logs.
+const hashParams = new URLSearchParams(window.location.hash.slice(1));
+if (hashParams.has('token')) {
+  localStorage.setItem('Joshuatex_token', hashParams.get('token'));
   window.history.replaceState({}, document.title, window.location.pathname);
 }
 
-const token = localStorage.getItem('Joshuatex_token');
-if (!token) window.location.href = '/';
+let token = localStorage.getItem('Joshuatex_token');
+if (!token) window.location.href = '/app/login';
+
+// Continuar para onde o utilizador ia antes de fazer login (ex.: um convite).
+const pendingNext = sessionStorage.getItem('aurea_next');
+if (token && pendingNext) {
+  sessionStorage.removeItem('aurea_next');
+  if (pendingNext.startsWith('/app/')) window.location.href = pendingNext;
+}
+
+function escapeHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// Lê a mensagem de erro de uma resposta da API.
+async function apiError(res, fallback) {
+  try {
+    const data = await res.json();
+    const d = data?.detail;
+    if (typeof d === 'string') return d;
+    if (d?.error) return d.error;
+    if (Array.isArray(d) && d[0]?.msg) return d[0].msg;
+  } catch { }
+  return fallback;
+}
 
 function logout(e) {
   if (e) e.preventDefault();
@@ -288,6 +409,7 @@ async function loadUser() {
     document.getElementById('profileAvatar').textContent = name.substring(0, 2).toUpperCase();
     document.getElementById('profileName').textContent = name;
     document.getElementById('welcomeTitle').textContent = `Welcome back, ${name}.`;
+    document.getElementById('pwUsername').value = currentUser.username;
 
   } catch (err) {
     logout();
@@ -339,10 +461,10 @@ async function checkGithubRepos() {
            return;
        }
        
-       let optionsHTML = '<option value="" disabled selected>👇 Choose a repository from the list...</option>';
+       let optionsHTML = '<option value="" disabled selected>Choose a repository from the list...</option>';
        
        optionsHTML += repos.map(r => {
-           return `<option value="${r.full_name}">${r.full_name} ${r.private ? '🔒 (Private)' : ''}</option>`;
+           return `<option value="${escapeHtml(r.full_name)}">${escapeHtml(r.full_name)} ${r.private ? '(private)' : ''}</option>`;
        }).join('');
        
        select.innerHTML = optionsHTML;
@@ -367,10 +489,7 @@ async function importGithubRepo() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ repo_name: repoName })
     });
-    if (!res.ok) {
-       const data = await res.json();
-       throw new Error(data.detail || 'Error importing project.');
-    }
+    if (!res.ok) throw new Error(await apiError(res, 'Error importing project.'));
     const newProject = await res.json();
     window.location.href = `/app/editor?id=${newProject.id}`;
   } catch (err) {
@@ -453,7 +572,7 @@ function renderProjects() {
   filtered.forEach(p => {
     const card = document.createElement('div');
     card.className = 'card';
-    card.onclick = () => window.location.href = `/app/editor?id=${p.id}`;
+    card.onclick = () => window.location.href = `/app/editor?id=${Number(p.id)}`;
     card.innerHTML = `
       <div class="card-preview">
         <div class="mini-paper">
@@ -464,20 +583,23 @@ function renderProjects() {
         </div>
       </div>
       <div class="card-body">
-        <div class="card-title">${p.name}</div>
+        <div class="card-title">${escapeHtml(p.name)}</div>
         <div class="card-meta">
           <svg viewBox="0 0 24 24" width="12" height="12"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
           ${formatDate(p.updated_at)}
         </div>
       </div>
       <div class="card-actions">
-        <a href="/app/editor?id=${p.id}" class="btn-edit" onclick="event.stopPropagation()">
+        <a href="/app/editor?id=${Number(p.id)}" class="btn-edit" onclick="event.stopPropagation()">
           <svg viewBox="0 0 24 24" width="13" height="13"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Edit
         </a>
-        <button class="btn-delete" title="Delete" onclick="event.stopPropagation(); deleteProject(${p.id})">
+        <span class="card-actions-right">
+        ${downloadButtons(p)}
+        <button class="btn-delete" title="Delete" onclick="event.stopPropagation(); deleteProject(${Number(p.id)})">
           <svg viewBox="0 0 24 24" width="13" height="13"><polyline points="3,6 5,6 21,6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
         </button>
+        </span>
       </div>
     `;
     grid.appendChild(card);
@@ -506,7 +628,7 @@ function renderSharedProjects() {
     const color = COLORS[p.id % COLORS.length];
     const card = document.createElement('div');
     card.className = 'card';
-    card.onclick = () => window.location.href = `/app/editor?id=${p.id}`;
+    card.onclick = () => window.location.href = `/app/editor?id=${Number(p.id)}`;
 
     const roleBadge = p.role === 'viewer'
       ? `<span style="font-size:0.7rem;font-weight:700;background:#f0f0f0;border:1.5px solid #ddd;padding:1px 7px;border-radius:3px;color:#666">Viewer</span>`
@@ -516,12 +638,12 @@ function renderSharedProjects() {
       <div class="card-accent ${color}"></div>
       <div class="card-body">
         <div class="card-title" style="display:flex;align-items:center;gap:0.5rem">
-          ${p.name} ${roleBadge}
+          ${escapeHtml(p.name)} ${roleBadge}
         </div>
         <div class="card-meta">
           <span>
             <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            ${p.owner_name || p.owner_username}
+            ${escapeHtml(p.owner_name || p.owner_username)}
           </span>
           <span>
             <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12,6 12,12 16,14"/></svg>
@@ -530,14 +652,17 @@ function renderSharedProjects() {
         </div>
       </div>
       <div class="card-actions">
-        <a href="/app/editor?id=${p.id}" onclick="event.stopPropagation()">
+        <a href="/app/editor?id=${Number(p.id)}" onclick="event.stopPropagation()">
           <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
           Open
         </a>
-        <button class="icon-btn" title="Leave project" onclick="event.stopPropagation(); leaveProject(${p.id})"
+        <span class="card-actions-right">
+        ${downloadButtons(p)}
+        <button class="icon-btn" title="Leave project" onclick="event.stopPropagation(); leaveProject(${Number(p.id)})"
           style="color:#E03030" title="Leave this project">
           <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
+        </span>
       </div>
     `;
     grid.appendChild(card);
@@ -547,7 +672,7 @@ function renderSharedProjects() {
 }
 
 async function leaveProject(id) {
-  if (!confirm('Are you sure you want to leave this project? You will lose access immediately.')) return;
+  if (!await uiConfirm('You will lose access to it immediately.', { title: 'Leave this project?', okText: 'Leave', danger: true })) return;
   try {
     const res = await fetch(`/api/shared/${id}`, {
       method: 'DELETE',
@@ -563,14 +688,62 @@ async function leaveProject(id) {
 
 
 
+// ---------------------------------------------------------------------------
+// Descarregar PDF / ZIP a partir da lista
+// ---------------------------------------------------------------------------
+const DL_ICON = '<svg viewBox="0 0 24 24" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+
+function downloadButtons(p) {
+  const id = Number(p.id);
+  const name = escapeHtml(JSON.stringify(String(p.name || 'project')));
+  return `
+    <button class="btn-dl" title="Download PDF (compiles the main file)" onclick="event.stopPropagation(); downloadProject(${id}, ${name}, 'pdf', this)">${DL_ICON}<span>PDF</span></button>
+    <button class="btn-dl" title="Download all files as ZIP" onclick="event.stopPropagation(); downloadProject(${id}, ${name}, 'zip', this)">${DL_ICON}<span>ZIP</span></button>`;
+}
+
+async function downloadProject(id, name, kind, btn) {
+  if (btn.disabled) return;
+  const label = btn.querySelector('span');
+  const oldText = label.textContent;
+  btn.disabled = true;
+  btn.classList.add('busy');
+  label.textContent = kind === 'pdf' ? 'Compiling…' : 'Zipping…';
+
+  try {
+    const url = kind === 'pdf' ? `/api/projects/${id}/pdf` : `/api/projects/${id}/download-zip`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+    if (res.status === 401) { logout(); return; }
+    if (!res.ok) {
+      let msg = await apiError(res, `Could not download the ${kind.toUpperCase()}.`);
+      if (kind === 'pdf' && res.status === 400) msg = 'The project has LaTeX errors, so no PDF was produced. Open it in the editor to see them.';
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = String(name).replace(/[\\/:*?"<>|]/g, '_') + '.' + kind;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  } catch (e) {
+    alert(e.message);
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('busy');
+    label.textContent = oldText;
+  }
+}
+
 async function deleteProject(id) {
-  if (!confirm('Are you absolutely sure you want to delete this project?')) return;
+  const proj = projects.find(p => p.id === id);
+  if (!await uiConfirm(`"${proj ? proj.name : id}" and all its files will be deleted. This cannot be undone.`, { title: 'Delete project?', danger: true })) return;
   try {
     const res = await fetch(`/api/projects/${id}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    if (!res.ok) throw new Error('Error deleting project');
+    if (!res.ok) throw new Error(await apiError(res, 'Error deleting project'));
     projects = projects.filter(p => p.id !== id);
     filtered = filtered.filter(p => p.id !== id);
     renderProjects();
@@ -647,7 +820,7 @@ async function createProject() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ name, template: selectedTemplate, is_public: false, remote_provider: provider })
     });
-    if (!res.ok) throw new Error('Error creating project');
+    if (!res.ok) throw new Error(await apiError(res, 'Error creating project'));
     const newProject = await res.json();
     closeNewModal();
     window.location.href = `/app/editor?id=${newProject.id}`;
@@ -662,7 +835,7 @@ async function uploadZip(event) {
   const file = event.target.files[0];
   if (!file) return;
   const defaultName = file.name.replace(/\.[^/.]+$/, "");
-  const projectName = prompt("Give this imported project a name:", defaultName);
+  const projectName = await uiPrompt('Name of the imported project:', defaultName, { title: 'Import ZIP', okText: 'Import' });
   if (!projectName) { event.target.value = ''; return; }
 
   const provider = document.getElementById('newProjectProvider').value;
@@ -679,7 +852,7 @@ async function uploadZip(event) {
       headers: { 'Authorization': `Bearer ${token}` },
       body: formData
     });
-    if (!res.ok) throw new Error('Error uploading ZIP');
+    if (!res.ok) throw new Error(await apiError(res, 'Error uploading ZIP'));
     const newProject = await res.json();
     window.location.href = `/app/editor?id=${newProject.id}`;
   } catch (err) {
@@ -718,7 +891,7 @@ function openSettingsModal() {
     btnLinkGitea.style.display = 'none';
   } else {
     giteaStatus.textContent = 'Not linked';
-    giteaStatus.style.color = '#64748b';
+    giteaStatus.style.color = '';
     btnLinkGitea.style.display = 'block';
   }
 
@@ -730,14 +903,14 @@ function openSettingsModal() {
     btnLinkGithub.style.display = 'none';
   } else {
     githubStatus.textContent = 'Not linked';
-    githubStatus.style.color = '#64748b';
+    githubStatus.style.color = '';
     btnLinkGithub.style.display = 'block';
   }
 
   const oldPwField = document.getElementById('oldPasswordField');
   const pwTitle = document.getElementById('passwordSectionTitle');
   if (currentUser && currentUser.has_password) {
-    oldPwField.style.display = 'block';
+    oldPwField.style.display = '';
     pwTitle.textContent = 'Change Password';
   } else {
     oldPwField.style.display = 'none';
@@ -745,11 +918,19 @@ function openSettingsModal() {
   }
 }
 
-function linkGit(provider) {
-  if (provider === 'github') {
-    window.location.href = `/login/github?token=${token}`;
-  } else {
-    window.location.href = `/login?token=${token}`;
+async function linkGit(provider) {
+  // O servidor devolve o URL de autorização; o token da sessão vai no
+  // cabeçalho e nunca num URL.
+  try {
+    const res = await fetch(`/api/auth/link/${provider}`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!res.ok) throw new Error(await apiError(res, 'Could not start the account link.'));
+    const data = await res.json();
+    window.location.href = data.url;
+  } catch (err) {
+    alert(err.message);
   }
 }
 
@@ -775,8 +956,8 @@ async function updatePassword() {
     errorBox.style.display = 'block';
     return;
   }
-  if (!newPassword || newPassword.length < 6) {
-    errorBox.textContent = 'The new password must be at least 6 characters.';
+  if (!newPassword || newPassword.length < 10) {
+    errorBox.textContent = 'The new password must be at least 10 characters.';
     errorBox.style.display = 'block';
     return;
   }
@@ -797,12 +978,17 @@ async function updatePassword() {
     const data = await res.json();
     
     if (res.ok) {
+      // As sessões antigas foram terminadas; esta continua com o token novo.
+      if (data.access_token) {
+        token = data.access_token;
+        localStorage.setItem('Joshuatex_token', token);
+      }
       successBox.textContent = data.message;
       successBox.style.display = 'block';
       currentUser.has_password = true; 
       document.getElementById('oldPassword').value = '';
       document.getElementById('newPassword').value = '';
-      document.getElementById('oldPasswordField').style.display = 'block';
+      document.getElementById('oldPasswordField').style.display = '';
       document.getElementById('passwordSectionTitle').textContent = 'Change Password';
     } else {
       errorBox.textContent = data.detail || 'Error updating password.';
@@ -822,8 +1008,147 @@ function closeModal(e) {
   if (e.target === e.currentTarget) {
     if (e.currentTarget.id === 'newModal') closeNewModal();
     if (e.currentTarget.id === 'settingsModal') closeSettingsModal();
+    if (e.currentTarget.id === 'mcpModal') closeMcpModal();
   }
 }
+
+async function logoutEverywhere() {
+  if (!await uiConfirm('This browser stays signed in. MCP tokens are not affected — revoke those separately.', { title: 'Sign out all other devices?', okText: 'Sign out', danger: true })) return;
+  try {
+    const res = await fetch('/api/auth/logout-all', { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error(await apiError(res, 'Could not sign out the other sessions.'));
+    token = (await res.json()).access_token;
+    localStorage.setItem('Joshuatex_token', token);
+    alert('Done. All other sessions were signed out.');
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// AI connection (MCP)
+// ---------------------------------------------------------------------------
+const MCP_URL = `${location.origin}/mcp`;
+
+function openMcpModal() {
+  document.getElementById('mcpModal').classList.add('open');
+  document.getElementById('mcpNew').hidden = true;
+  document.getElementById('mcpError').textContent = '';
+  loadMcpTokens();
+  setTimeout(() => document.getElementById('mcpName').focus(), 50);
+}
+
+function closeMcpModal() {
+  document.getElementById('mcpModal').classList.remove('open');
+  // O token em claro não fica no ecrã.
+  document.getElementById('mcpTokenValue').textContent = '';
+  ['mcpSnipCC', 'mcpSnipJson', 'mcpSnipDesktop', 'mcpSnipOpencode', 'mcpSnipAntigravity'].forEach(id => document.getElementById(id).textContent = '');
+  document.getElementById('mcpNew').hidden = true;
+}
+
+function _fmtDate(v) {
+  if (!v) return '—';
+  const d = new Date(String(v).replace(' ', 'T') + 'Z');
+  return isNaN(d) ? String(v) : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+async function loadMcpTokens() {
+  const list = document.getElementById('mcpList');
+  try {
+    const res = await fetch('/api/tokens', { headers: { 'Authorization': `Bearer ${token}` } });
+    if (!res.ok) throw new Error(await apiError(res, 'Could not load tokens.'));
+    const rows = await res.json();
+    if (!rows.length) {
+      list.innerHTML = '<div class="mcp-empty">No tokens yet.</div>';
+      return;
+    }
+    list.innerHTML = rows.map(t => {
+      const expired = t.expires_at && new Date(String(t.expires_at).replace(' ', 'T') + 'Z') < new Date();
+      return `
+        <div class="mcp-row">
+          <div class="mcp-row-main">
+            <strong>${escapeHtml(t.name)}</strong>
+            <span class="mcp-badge ${t.scope === 'write' ? 'write' : ''}">${t.scope === 'write' ? 'read + write' : 'read only'}</span>
+            ${expired ? '<span class="mcp-badge expired">expired</span>' : ''}
+          </div>
+          <div class="mcp-row-meta">
+            <code>${escapeHtml(t.prefix)}…</code> · created ${_fmtDate(t.created_at)} · last used ${_fmtDate(t.last_used_at)} · expires ${_fmtDate(t.expires_at)}
+          </div>
+          <button class="btn btn-white mcp-revoke" onclick="revokeMcpToken(${Number(t.id)}, ${escapeHtml(JSON.stringify(t.name))})">Revoke</button>
+        </div>`;
+    }).join('');
+  } catch (e) {
+    list.innerHTML = `<div class="mcp-empty">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function createMcpToken() {
+  const name = document.getElementById('mcpName').value.trim() || 'AI assistant';
+  const scope = document.getElementById('mcpScope').value;
+  const expires_days = Number(document.getElementById('mcpExpiry').value);
+  const err = document.getElementById('mcpError');
+  const btn = document.getElementById('mcpCreateBtn');
+  err.textContent = '';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/tokens', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, scope, expires_days }),
+    });
+    if (!res.ok) throw new Error(await apiError(res, 'Could not create the token.'));
+    const data = await res.json();
+    const tok = data.token;
+
+    document.getElementById('mcpTokenValue').textContent = tok;
+    document.getElementById('mcpSnipCC').textContent =
+      `claude mcp add --transport http aureatex ${MCP_URL} --header "Authorization: Bearer ${tok}"`;
+    document.getElementById('mcpSnipJson').textContent = JSON.stringify({
+      mcpServers: { aureatex: { url: MCP_URL, headers: { Authorization: `Bearer ${tok}` } } },
+    }, null, 2);
+    const viaMcpRemote = {
+      mcpServers: { aureatex: { command: 'npx', args: ['-y', 'mcp-remote', MCP_URL, '--header', `Authorization: Bearer ${tok}`] } },
+    };
+    document.getElementById('mcpSnipDesktop').textContent = JSON.stringify(viaMcpRemote, null, 2);
+    document.getElementById('mcpSnipAntigravity').textContent = JSON.stringify(viaMcpRemote, null, 2);
+    document.getElementById('mcpSnipOpencode').textContent = JSON.stringify({
+      $schema: 'https://opencode.ai/config.json',
+      mcp: { aureatex: { type: 'remote', url: MCP_URL, enabled: true, headers: { Authorization: `Bearer ${tok}` } } },
+    }, null, 2);
+    document.getElementById('mcpNew').hidden = false;
+    document.getElementById('mcpName').value = '';
+    loadMcpTokens();
+  } catch (e) {
+    err.textContent = e.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function revokeMcpToken(id, name) {
+  if (!await uiConfirm(`Any AI tool using "${name}" stops working immediately.`, { title: 'Revoke token?', okText: 'Revoke', danger: true })) return;
+  const res = await fetch(`/api/tokens/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+  if (!res.ok) alert(await apiError(res, 'Could not revoke the token.'));
+  loadMcpTokens();
+}
+
+document.addEventListener('click', async (e) => {
+  const copyBtn = e.target.closest('.mcp-copy');
+  if (copyBtn) {
+    const text = document.getElementById(copyBtn.dataset.copy).textContent;
+    try { await navigator.clipboard.writeText(text); } catch { }
+    const old = copyBtn.textContent;
+    copyBtn.textContent = 'Copied ✓';
+    setTimeout(() => copyBtn.textContent = old, 1500);
+    return;
+  }
+  const tab = e.target.closest('.mcp-tabs button');
+  if (tab) {
+    document.querySelectorAll('.mcp-tabs button').forEach(b => b.classList.toggle('active', b === tab));
+    document.querySelectorAll('.mcp-snippet').forEach(p => p.hidden = p.dataset.panel !== tab.dataset.tab);
+  }
+});
 
 document.addEventListener('click', () => {
   const dropdown = document.getElementById('profileDropdown');

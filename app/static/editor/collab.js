@@ -11,6 +11,10 @@ class CollabClient {
             this.userId = 0;
         }
 
+        // Papel no projeto ('owner' | 'editor' | 'viewer'), enviado pelo servidor.
+        this.role            = null;
+        this.connected       = false;
+
         this.ws              = null;
         this.revision        = 0;
         this.pending         = [];
@@ -25,22 +29,22 @@ class CollabClient {
 
     connect() {
         const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-        const url = `${proto}://${location.host}/ws/projects/${this.projectId}/collab?token=${this.token}`;
+        const url = `${proto}://${location.host}/ws/projects/${this.projectId}/collab`;
 
         this.ws = new WebSocket(url);
 
         this.ws.onopen = () => {
+            // O token vai na primeira mensagem para não ficar em URLs nem em logs.
+            this.ws.send(JSON.stringify({ type: 'auth', token: this.token }));
             this._startPing();
-
-            if (this.currentFile) {
-                this._sendJoin(this.currentFile);
-            }
         };
 
         this.ws.onmessage = (e) => this._onMessage(JSON.parse(e.data));
 
         this.ws.onclose = (e) => {
             clearInterval(this._pingInterval);
+            this.connected = false;
+            this._setOffline(true);
 
             // Código usado pelo backend para forçar reload depois do pull.
             if (
@@ -58,6 +62,14 @@ class CollabClient {
 
             if (e.code >= 4000 && e.code <= 4099) {
                 console.warn(`[Collab] WS closed (Code ${e.code}). Reconnection aborted.`);
+
+                if (e.code === 4001) {
+                    // Sessão expirada.
+                    localStorage.removeItem('Joshuatex_token');
+                    window.location.href = '/app/login';
+                } else {
+                    window.location.href = '/app/projects';
+                }
                 return;
             }
 
@@ -79,25 +91,27 @@ class CollabClient {
         return new Promise((resolve) => {
             this._onInitResolve = resolve;
 
-            if (this.ws?.readyState === WebSocket.OPEN) {
+            // Se a ligação ainda não estiver pronta, o join é enviado quando
+            // chegar o "welcome". Sem "init" não se liga o editor ao servidor,
+            // para nunca se enviarem edições feitas sobre conteúdo desconhecido.
+            if (this.connected) {
                 this._sendJoin(filename);
-            } else {
-                this._resolveInitFallback();
             }
 
-            setTimeout(() => this._resolveInitFallback(), 3000);
+            setTimeout(() => {
+                if (this._onInitResolve === resolve) {
+                    this._onInitResolve = null;
+                    resolve(false);
+                }
+            }, 5000);
         });
     }
 
-    _resolveInitFallback() {
-        if (this._onInitResolve) {
-            this._onInitResolve();
-            this._onInitResolve = null;
-            this._attachChangeListener();
-        }
-    }
-
     leaveFile() {
+        if (this.currentFile) {
+            this._send({ type: 'leave' });
+        }
+
         this.currentFile = null;
 
         this._detachChangeListener();
@@ -120,6 +134,30 @@ class CollabClient {
 
     _onMessage(msg) {
         switch (msg.type) {
+            case 'welcome':
+                // Id desta ligação (um por separador) — usado no desempate do OT.
+                this.userId = msg.client_id;
+                this.role = msg.role;
+                this.connected = true;
+                this._setOffline(false);
+
+                if (typeof applyRoleToUI === 'function') {
+                    applyRoleToUI(this.role);
+                }
+
+                if (this.currentFile) {
+                    this._sendJoin(this.currentFile);
+                }
+                break;
+
+            case 'error':
+                console.warn('[Collab] Server error:', msg.error, msg.file || '');
+
+                if (msg.error === 'file_not_found' && typeof loadFiles === 'function') {
+                    loadFiles();
+                }
+                break;
+
             case 'init':
                 this._handleInit(msg);
                 break;
@@ -221,26 +259,42 @@ class CollabClient {
         }
 
         this._attachChangeListener();
+        this.editor.updateOptions({ readOnly: this.role === 'viewer' });
+
+        if (typeof files !== 'undefined') {
+            const current = files.find(f => f.name === msg.file);
+            if (current) current.content = msg.content;
+        }
 
         if (this._onInitResolve) {
-            this._onInitResolve();
+            const resolve = this._onInitResolve;
             this._onInitResolve = null;
+            resolve(true);
         }
     }
 
     _handleRemoteOp(msg) {
         if (msg.file !== this.currentFile) return;
 
-        let transformed = msg.op;
+        let incoming = msg.op;
         const incomingUserId = msg.user_id;
 
-        for (const pending of this.pending) {
-            transformed = OT.transform(pending, transformed, this.userId, incomingUserId);
-        }
+        // As nossas ops ainda não confirmadas (enviada + em fila) foram criadas
+        // sem conhecer esta op remota, e vice-versa: transformam-se nos dois
+        // sentidos. (Antes só se ajustava a op remota e apenas contra a op
+        // enviada — com duas pessoas a escrever ao mesmo tempo o texto divergia.)
+        const rebase = (list) => list.map(local => {
+            const localAfter = OT.transform(incoming, local, incomingUserId, this.userId);
+            incoming = OT.transform(local, incoming, this.userId, incomingUserId);
+            return localAfter;
+        });
+
+        this.pending = rebase(this.pending);
+        this.buffer = rebase(this.buffer);
 
         this.revision = msg.revision;
 
-        this._applyToEditor(transformed);
+        this._applyToEditor(incoming);
     }
 
     _handleAck(msg) {
@@ -459,6 +513,8 @@ class CollabClient {
             if (!model) return;
 
             if (op.type === 'insert') {
+                if (!op.text) return;
+
                 const pos = model.getPositionAt(op.pos);
 
                 model.pushEditOperations(
@@ -475,6 +531,8 @@ class CollabClient {
                     () => null
                 );
             } else if (op.type === 'delete') {
+                if (!op.len) return;
+
                 const from = model.getPositionAt(op.pos);
                 const to = model.getPositionAt(op.pos + op.len);
 
@@ -643,6 +701,23 @@ class CollabClient {
         }
     }
 
+    _setOffline(offline) {
+        const text = document.getElementById('statusText');
+        const dot = document.getElementById('statusDot');
+
+        if (offline) {
+            // Sem ligação não se aceita escrita: evita perder texto que nunca chegaria ao servidor.
+            this._detachChangeListener();
+            this.editor.updateOptions({ readOnly: true });
+
+            if (text) text.textContent = 'Reconnecting...';
+            if (dot) dot.style.background = '#D97706';
+        } else {
+            if (text && text.textContent === 'Reconnecting...') text.textContent = 'Ready';
+            if (dot) dot.style.background = '';
+        }
+    }
+
     _send(data) {
         if (this.ws?.readyState === WebSocket.OPEN) {
             this.ws.send(JSON.stringify(data));
@@ -698,9 +773,14 @@ const OT = {
 
         if (pending.type === 'delete' && incoming.type === 'insert') {
             if (pending.pos < incoming.pos) {
+                if (incoming.pos < pending.pos + pending.len) {
+                    // Insert dentro do intervalo apagado: é engolido (igual ao servidor).
+                    return { ...incoming, pos: pending.pos, text: '' };
+                }
+
                 return {
                     ...incoming,
-                    pos: Math.max(pending.pos, incoming.pos - pending.len)
+                    pos: incoming.pos - pending.len
                 };
             }
 

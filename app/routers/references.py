@@ -5,16 +5,23 @@ Referências académicas gratuitas:
   - Zotero: biblioteca pessoal (API key gratuita)
 """
 
+import asyncio
+import re
+import urllib.parse
+
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+
 from core.database import get_db
 from core.security import get_current_user
+from core.storage import write_file
 
-from routers.collab import sync_doc_content
-from routers.collab import _rooms
+from routers.collab import notify_room, room_edit
+from routers.files import _assert_project_owner
 
-import os
-import re
+BIB_FILE = "refs.bib"
+BIB_HEADER = "% Gerado pelo AureaTeX\n\n"
 
 router = APIRouter(prefix="/api/references", tags=["references"])
 
@@ -222,7 +229,8 @@ def zotero_to_bibtex(item: dict) -> tuple[str, str]:
 async def search_references(
     q: str = Query(..., min_length=3),
     source: str = Query(default="crossref"),
-    limit: int  = Query(default=20, le=50),
+    limit: int  = Query(default=20, ge=1, le=50),
+    user=Depends(get_current_user),
 ):
     async with httpx.AsyncClient(timeout=15) as client:
         if source == "openalex":
@@ -298,11 +306,16 @@ async def search_references(
 
 
 @router.get("/doi/{doi:path}")
-async def get_by_doi(doi: str):
+async def get_by_doi(doi: str, user=Depends(get_current_user)):
     """Resolve um DOI e devolve os metadados + BibTeX."""
+    doi = doi.strip()
+
+    if not re.match(r"^10\.\d{4,9}/\S+$", doi) or ".." in doi:
+        raise HTTPException(status_code=400, detail="DOI inválido.")
+
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(
-            f"https://api.crossref.org/works/{doi}",
+            "https://api.crossref.org/works/" + urllib.parse.quote(doi, safe=""),
             params={"mailto": "joshuatex@joshuadourado.pt"},
         )
         if resp.status_code == 404:
@@ -372,10 +385,13 @@ async def get_zotero_refs(user=Depends(get_current_user), cur=Depends(get_db), l
 
 @router.post("/zotero/connect")
 async def connect_zotero(body: dict, user=Depends(get_current_user), cur=Depends(get_db)):
-    zotero_user_id = body.get("user_id", "").strip()
-    api_key        = body.get("api_key", "").strip()
+    zotero_user_id = str(body.get("user_id", "")).strip()
+    api_key        = str(body.get("api_key", "")).strip()
     if not zotero_user_id or not api_key:
         raise HTTPException(status_code=400, detail="user_id e api_key são obrigatórios.")
+
+    if not zotero_user_id.isdigit() or not re.match(r"^[A-Za-z0-9]{8,64}$", api_key):
+        raise HTTPException(status_code=400, detail="User ID ou API key do Zotero inválidos.")
 
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(
@@ -402,93 +418,184 @@ async def zotero_status(user=Depends(get_current_user), cur=Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Exportar BibTeX
+# Escrever no refs.bib
 # ---------------------------------------------------------------------------
+
+_BIB_KEY_RE = re.compile(r"@\s*\w+\s*\{\s*([^,\s{}]+)\s*,")
+
+
+def _bib_keys(bib: str) -> set:
+    return {k.lower() for k in _BIB_KEY_RE.findall(bib or "")}
+
+
+async def _append_to_bib(project_id: int, user_id: int, cur, build):
+    """
+    Acrescenta entradas ao refs.bib sem pisar o trabalho de ninguém.
+
+    `build(existing)` recebe o conteúdo ATUAL do ficheiro e devolve
+    (texto_a_acrescentar, resultado). O conteúdo atual vem do documento aberto
+    no editor (se alguém o tiver aberto) ou da base de dados — nunca de uma
+    cópia antiga. Se estiver aberto, o texto entra como uma edição normal de
+    colaboração, por isso quem está a escrever não perde nada.
+    """
+    async with room_edit(project_id) as edit:
+        live = edit.live_content(BIB_FILE)
+
+        if live is not None:
+            addition, result = build(live)
+
+            if addition:
+                if not live.strip():
+                    sep = ""
+                elif live.endswith("\n\n"):
+                    sep = ""
+                elif live.endswith("\n"):
+                    sep = "\n"
+                else:
+                    sep = "\n\n"
+
+                await edit.append(BIB_FILE, sep + addition + "\n", user_id)
+
+            return result
+
+        await cur.execute(
+            "SELECT content FROM project_files WHERE project_id = %s AND filename = %s FOR UPDATE",
+            (project_id, BIB_FILE),
+        )
+        row = await cur.fetchone()
+        existing = (row["content"] or "") if row else ""
+
+        addition, result = build(existing)
+
+        if not addition:
+            return result
+
+        if existing.strip():
+            full_bib = existing.rstrip() + "\n\n" + addition + "\n"
+        else:
+            full_bib = BIB_HEADER + addition + "\n"
+
+        await cur.execute(
+            """
+            INSERT INTO project_files (project_id, filename, content)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE content = VALUES(content), updated_at = NOW()
+            """,
+            (project_id, BIB_FILE, full_bib),
+        )
+        await cur.execute("UPDATE projects SET updated_at = NOW() WHERE id = %s", (project_id,))
+        await cur.connection.commit()
+
+        await asyncio.to_thread(write_file, project_id, BIB_FILE, full_bib)
+
+    if not row:
+        notify_room(project_id, {
+            "type": "file_added",
+            "file": {"name": BIB_FILE, "is_main": False},
+        })
+
+    # Atualiza os separadores em segundo plano de quem tem o projeto aberto.
+    notify_room(project_id, {
+        "type": "init",
+        "file": BIB_FILE,
+        "content": full_bib,
+        "revision": 0,
+        "users": [],
+    })
+
+    return result
+
 
 @router.post("/export-bib/{project_id}")
 async def export_bib(project_id: int, body: dict, user=Depends(get_current_user), cur=Depends(get_db)):
-    await cur.execute(
-        """
-        SELECT id FROM projects WHERE id = %s AND (
-            owner_id = %s OR EXISTS (
-                SELECT 1 FROM project_collaborators pc
-                WHERE pc.project_id = %s AND pc.user_id = %s
-            )
-        )
-        """,
-        (project_id, user["id"], project_id, user["id"]),
-    )
-    if not await cur.fetchone():
-        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+    await _assert_project_owner(project_id, user["id"], cur, require_edit=True)
 
     items = body.get("items", [])
-    if not items:
+    if not isinstance(items, list) or not items:
         raise HTTPException(status_code=400, detail="Nenhum item para exportar.")
 
-    existing_bib = ""
-    if project_id in _rooms:
-        room = _rooms[project_id]
-        if 'refs.bib' in room.docs:
-            existing_bib = room.docs['refs.bib'].content
+    if len(items) > 500:
+        raise HTTPException(status_code=400, detail="Demasiados itens de uma vez.")
 
-    if not existing_bib:
-        await cur.execute(
-            "SELECT content FROM project_files WHERE project_id = %s AND filename = 'refs.bib'",
-            (project_id,),
-        )
-        existing = await cur.fetchone()
-        existing_bib = existing["content"] if existing else ""
+    def build(existing_bib: str):
+        existing_keys = _bib_keys(existing_bib)
+        new_entries = []
+        skipped = 0
 
-    existing_keys = set(re.findall(r"@\w+\{(\w+),", existing_bib))
+        for item in items:
+            if not isinstance(item, dict):
+                continue
 
-    new_entries = []
-    skipped     = 0
+            raw    = item.get("_raw") or {}
+            source = item.get("_raw_source") or ("zotero" if "data" in raw or "itemType" in raw else "crossref")
 
-    for item in items:
-        raw    = item.get("_raw", {})
-        source = item.get("_raw_source", "crossref")
+            try:
+                if source == "zotero":
+                    key, bib = zotero_to_bibtex({"data": raw} if "itemType" in raw else raw)
+                elif source == "openalex":
+                    key, bib = openalex_to_bibtex(raw)
+                else:
+                    key, bib = crossref_to_bibtex(raw)
+            except Exception:
+                skipped += 1
+                continue
 
-        if source == "zotero":
-            key, bib = zotero_to_bibtex({"data": raw} if "itemType" in raw else raw)
-        elif source == "openalex":
-            key, bib = openalex_to_bibtex(raw)
-        else:
-            key, bib = crossref_to_bibtex(raw)
+            if key.lower() in existing_keys:
+                skipped += 1
+                continue
 
-        if key in existing_keys:
-            skipped += 1
-            continue
+            existing_keys.add(key.lower())
+            new_entries.append(bib)
 
-        existing_keys.add(key)
-        new_entries.append(bib)
+        return "\n\n".join(new_entries), (len(new_entries), skipped)
 
-    if not new_entries and skipped > 0:
+    added, skipped = await _append_to_bib(project_id, user["id"], cur, build)
+
+    if not added:
         return {
             "status":  "skipped",
             "message": f"Todas as {skipped} referências já existem no refs.bib.",
             "count":   0,
         }
 
-    header = "% Gerado pelo JoshuaTeX — não editar manualmente as chaves\n\n"
-    if existing_bib:
-        full_bib = existing_bib.rstrip() + "\n\n" + "\n\n".join(new_entries)
-    else:
-        full_bib = header + "\n\n".join(new_entries)
-
-    await cur.execute(
-        """
-        INSERT INTO project_files (project_id, filename, content)
-        VALUES (%s, 'refs.bib', %s)
-        ON DUPLICATE KEY UPDATE content = VALUES(content), updated_at = NOW()
-        """,
-        (project_id, full_bib),
-    )
-
-
-    await sync_doc_content(project_id, 'refs.bib', full_bib)
-
-    msg = f"{len(new_entries)} referência(s) adicionadas ao refs.bib"
+    msg = f"{added} referência(s) adicionadas ao refs.bib"
     if skipped:
         msg += f" ({skipped} já existiam, ignoradas)"
 
-    return {"status": "success", "message": msg, "count": len(new_entries)}
+    return {"status": "success", "message": msg, "count": added}
+
+
+class RawBib(BaseModel):
+    bibtex: str = Field(min_length=3, max_length=200_000)
+
+
+@router.post("/append-bib/{project_id}")
+async def append_bib(project_id: int, body: RawBib, user=Depends(get_current_user), cur=Depends(get_db)):
+    """
+    Acrescenta BibTeX escrito à mão (ou vindo de um DOI) ao refs.bib.
+    É o servidor que junta ao ficheiro atual — o browser já não envia o
+    ficheiro inteiro a partir de uma cópia que podia estar desatualizada.
+    """
+    await _assert_project_owner(project_id, user["id"], cur, require_edit=True)
+
+    bibtex = body.bibtex.strip()
+
+    if not bibtex.startswith("@"):
+        raise HTTPException(status_code=400, detail="Entrada BibTeX inválida: tem de começar por @.")
+
+    new_keys = _bib_keys(bibtex)
+
+    def build(existing_bib: str):
+        duplicated = sorted(new_keys & _bib_keys(existing_bib))
+        return (None, duplicated) if duplicated else (bibtex, [])
+
+    duplicated = await _append_to_bib(project_id, user["id"], cur, build)
+
+    if duplicated:
+        return {
+            "status":  "skipped",
+            "message": f"Já existe no refs.bib: {', '.join(duplicated)}",
+            "count":   0,
+        }
+
+    return {"status": "success", "message": "Entrada adicionada ao refs.bib", "count": 1}

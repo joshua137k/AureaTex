@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="/static/theme.js"></script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AureoTeX - Sign in</title>
+<title>AureaTeX - Sign in</title>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/login/style.css">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
@@ -17,7 +18,7 @@
       <rect width="28" height="28" fill="#E03030"/>
       <path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/>
     </svg>
-    Aureo<span>TeX</span>
+    Aurea<span>TeX</span>
   </a>
 </header>
 <main class="main">
@@ -52,16 +53,16 @@
 
       <div class="divider" id="form-divider">or</div>
 
-      <div id="error-msg" style="display:none; color: var(--white); background: var(--red); padding: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; font-weight: bold; border: 2px solid var(--black);"></div>
+      <div id="error-msg" style="display:none; color: #fff; background: var(--red); padding: 0.5rem; margin-bottom: 1rem; font-size: 0.85rem; font-weight: bold; border: 2px solid var(--black);"></div>
 
       <form id="login-form" class="manual-form" onsubmit="handleManualLogin(event)">
         <div class="field">
           <label>Username</label>
-          <input type="text" id="login-username" placeholder="nickname" required>
+          <input type="text" id="login-username" placeholder="nickname" required autocomplete="username">
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="login-password" placeholder="••••••••" required>
+          <input type="password" id="login-password" placeholder="••••••••" required autocomplete="current-password">
         </div>
         <button type="submit" class="btn-primary" id="btn-login-submit">Sign in →</button>
         <p class="footer-note" style="margin-top: 1rem;">
@@ -80,7 +81,7 @@
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="reg-password" placeholder="Minimum 6 characters" required minlength="6">
+          <input type="password" id="reg-password" placeholder="Minimum 10 characters" required minlength="10" autocomplete="new-password">
         </div>
         <button type="submit" class="btn-primary" id="btn-reg-submit">Create Account →</button>
         <p class="footer-note" style="margin-top: 1rem;">
@@ -113,7 +114,7 @@ function toggleMode(e, mode) {
     githubBtn.style.display = 'none';
     divider.style.display = 'none';
     title.textContent = 'Create Account';
-    subtitle.textContent = 'Register locally to use AureoTeX.';
+    subtitle.textContent = 'Register locally to use AureaTeX.';
   } else {
     loginForm.style.display = 'flex';
     regForm.style.display = 'none';
@@ -127,9 +128,34 @@ function toggleMode(e, mode) {
 
 function showError(msg) {
   const errorBox = document.getElementById('error-msg');
-  errorBox.textContent = msg;
+  errorBox.textContent = typeof msg === 'string' ? msg : 'Something went wrong. Please try again.';
   errorBox.style.display = 'block';
 }
+
+function detailOf(data, fallback) {
+  const d = data?.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d) && d[0]?.msg) return d[0].msg;
+  return fallback;
+}
+
+function afterLogin() {
+  const next = sessionStorage.getItem('aurea_next');
+  sessionStorage.removeItem('aurea_next');
+  window.location.href = (next && next.startsWith('/app/')) ? next : '/app/projects';
+}
+
+// Erros devolvidos pelo login com Gitea/GitHub chegam em #error=...
+(function () {
+  const params = new URLSearchParams(window.location.hash.slice(1));
+  if (params.has('error')) {
+    window.addEventListener('DOMContentLoaded', () => showError(params.get('error')));
+    window.history.replaceState({}, document.title, window.location.pathname);
+  } else if (localStorage.getItem('Joshuatex_token')) {
+    // Já tem sessão: segue para os projetos.
+    afterLogin();
+  }
+})();
 
 async function handleManualLogin(e) {
   e.preventDefault();
@@ -150,9 +176,9 @@ async function handleManualLogin(e) {
     const data = await res.json();
     if (res.ok) {
       localStorage.setItem('Joshuatex_token', data.access_token);
-      window.location.href = '/app/projects';
+      afterLogin();
     } else {
-      showError(data.detail || 'Error signing in. Check your details.');
+      showError(detailOf(data, 'Error signing in. Check your details.'));
     }
   } catch (err) {
     showError('Connection error with the server.');
@@ -182,9 +208,9 @@ async function handleRegister(e) {
     const data = await res.json();
     if (res.ok) {
       localStorage.setItem('Joshuatex_token', data.access_token);
-      window.location.href = '/app/projects';
+      afterLogin();
     } else {
-      showError(data.detail || 'Error creating account.');
+      showError(detailOf(data, 'Error creating account.'));
     }
   } catch (err) {
     showError('Connection error with the server.');

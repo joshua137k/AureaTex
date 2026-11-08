@@ -219,3 +219,33 @@ body{
   .left-panel{padding:2rem;display:none}
   .right-panel{padding:2rem}
 }
+
+/* === Tema escuro === */
+:root[data-theme="dark"]{
+  --red:#e03a3a;
+  --black:#e5e9f0;
+  --white:#171a21;
+  --gray:#222733;
+  --red-light:rgba(240,82,82,.16);
+  --shadow:4px 4px 0 #000;
+  --shadow-sm:2px 2px 0 #000;
+}
+:root[data-theme="dark"] .header,
+:root[data-theme="dark"] .left-panel,
+:root[data-theme="dark"] .field input,
+:root[data-theme="dark"] .btn-gitea,
+:root[data-theme="dark"] .btn-primary{border-color:#3a4252}
+:root[data-theme="dark"] .left-panel h1,
+:root[data-theme="dark"] .left-panel p,
+:root[data-theme="dark"] .feature-list li,
+:root[data-theme="dark"] .btn-gitea,
+:root[data-theme="dark"] .btn-primary{color:#fff}
+:root[data-theme="dark"] .gitea-icon{fill:#fff}
+:root[data-theme="dark"] .login-box .subtitle,
+:root[data-theme="dark"] .footer-note{color:#9aa5b8}
+:root[data-theme="dark"] .divider::before,
+:root[data-theme="dark"] .divider::after{background:#3a4252}
+:root[data-theme="dark"] .field input{color:var(--black)}
+:root[data-theme="dark"] .field input::placeholder{color:#6b7588}
+:root[data-theme="dark"] .btn-gitea,
+:root[data-theme="dark"] .btn-primary{box-shadow:2px 2px 0 #000}

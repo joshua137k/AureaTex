@@ -1,0 +1,15 @@
+# Esta pasta é usada diretamente pelo servidor Linux: manter sempre LF,
+# mesmo quando o git corre no Windows (core.autocrlf), para o git nunca
+# reescrever os ficheiros de produção com CRLF.
+* text=auto eol=lf
+
+*.png  binary
+*.jpg  binary
+*.ico  binary
+*.vsix binary
+*.pdf  binary
+*.bcmap binary
+*.pfb  binary
+*.ttf  binary
+*.woff binary
+*.woff2 binary

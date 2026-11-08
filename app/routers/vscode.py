@@ -1,41 +1,24 @@
 import asyncio
-import io
 import os
 import shutil
 import uuid
-import zipfile
+from collections import defaultdict
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from core.config import BASE_PROJETOS_DIR
+from core.config import BASE_PROJETOS_DIR, COMPILE_TIMEOUT_SECS, MAX_ZIP_BYTES
+from core.latex import CompileTimeout, compile_latex, output_pdf_name
+from core.paths import InvalidFilename, safe_join
 from core.security import get_current_user
+from core.storage import ArchiveError, extract_zip
+
+from routers.compile import _compile_semaphore
 
 router = APIRouter(prefix="/api/vscode", tags=["vscode"])
 
-# Semáforo exclusivo para integrações externas (evita que spam de compilações deite o servidor abaixo)
-_vscode_compile_semaphore = asyncio.Semaphore(5)
-
-async def _run_pdflatex(project_path: str, main_file: str) -> str:
-    """Corre pdflatex de forma assíncrona, sem bloquear o event loop."""
-    cmd = [
-        "pdflatex",
-        "-no-shell-escape",
-        "-interaction=nonstopmode",
-        "--",
-        main_file,
-    ]
-    env = os.environ.copy()
-    env["openin_any"] = "p"
-    proc = await asyncio.create_subprocess_exec(
-        *cmd,
-        cwd=project_path,
-        env=env,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.STDOUT,
-    )
-    stdout, _ = await proc.communicate()
-    return stdout.decode("utf-8", errors="replace")
+# Uma compilação efémera de cada vez por utilizador.
+_user_locks = defaultdict(asyncio.Lock)
 
 
 @router.post("/compile")
@@ -48,60 +31,52 @@ async def compile_vscode(
     Rota efêmera para integrações (VS Code).
     Não usa a base de dados. Apenas descompacta o ZIP, compila e devolve o PDF, limpando tudo a seguir.
     """
-    # 1. Cria uma pasta temporária única
-    temp_dir = os.path.join(BASE_PROJETOS_DIR, f"vscode_tmp_{user['id']}_{uuid.uuid4().hex[:8]}")
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    try:
-        # 2. Descompacta o ZIP em segurança diretamente para o disco
-        zip_content = await file.read()
-        with zipfile.ZipFile(io.BytesIO(zip_content)) as z:
-            for member in z.infolist():
-                member_path = os.path.abspath(os.path.join(temp_dir, member.filename))
-                # Prevenção contra Path Traversal
-                if member_path.startswith(os.path.abspath(temp_dir)):
-                    z.extract(member, temp_dir)
+    zip_content = await file.read(MAX_ZIP_BYTES + 1)
 
-        target_tex = os.path.join(temp_dir, main_file)
-        if not os.path.exists(target_tex):
-            raise HTTPException(
-                status_code=400, 
-                detail={"error": f"Ficheiro principal '{main_file}' não encontrado no ZIP.", "log": ""}
-            )
+    if len(zip_content) > MAX_ZIP_BYTES:
+        raise HTTPException(status_code=413, detail={"error": "O ZIP é demasiado grande (máx. 50 MB).", "log": ""})
 
-        # 3. Compilação
-        log_output = ""
-        async with _vscode_compile_semaphore:
+    temp_dir = os.path.join(BASE_PROJETOS_DIR, f"vscode_tmp_{user['id']}_{uuid.uuid4().hex[:12]}")
+
+    async with _user_locks[user["id"]]:
+        try:
             try:
-                # Compila 2 vezes para garantir que Índice e Referências ficam corretos
-                for _ in range(2):
-                    log_output = await asyncio.wait_for(
-                        _run_pdflatex(temp_dir, main_file),
-                        timeout=60.0,
-                    )
-            except asyncio.TimeoutError:
+                await asyncio.to_thread(extract_zip, zip_content, temp_dir)
+                target_tex = safe_join(temp_dir, main_file)
+            except (ArchiveError, InvalidFilename) as e:
+                raise HTTPException(status_code=400, detail={"error": str(e), "log": ""})
+
+            rel_main = os.path.relpath(target_tex, os.path.realpath(temp_dir)).replace("\\", "/")
+
+            if rel_main.startswith("-") or not os.path.isfile(target_tex):
                 raise HTTPException(
-                    status_code=408,
-                    detail={"error": "Tempo limite de compilação excedido (60s).", "log": log_output},
+                    status_code=400,
+                    detail={"error": f"Ficheiro principal '{main_file}' não encontrado no ZIP.", "log": ""},
                 )
 
-        # 4. Ler o PDF gerado
-        base_name = os.path.splitext(main_file)[0]
-        pdf_path = os.path.join(temp_dir, f"{base_name}.pdf")
-        
-        if os.path.exists(pdf_path):
-            with open(pdf_path, "rb") as f:
-                pdf_bytes = f.read()
-            # Devolvemos os bytes do PDF com o cabeçalho correto
-            return Response(content=pdf_bytes, media_type="application/pdf")
-        
-        # 5. Se o PDF não existe, houve erro de LaTeX
-        raise HTTPException(
-            status_code=400,
-            detail={"error": "Erro de compilação LaTeX.", "log": log_output[-3000:]},
-        )
-        
-    finally:
-        # 6. LIMPEZA GARANTIDA - Apaga a pasta quer tenha sucesso ou erro
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+            async with _compile_semaphore:
+                try:
+                    log_output, success = await compile_latex(temp_dir, rel_main, synctex=False)
+                except CompileTimeout as e:
+                    raise HTTPException(
+                        status_code=408,
+                        detail={
+                            "error": f"Tempo limite de compilação excedido ({COMPILE_TIMEOUT_SECS}s).",
+                            "log": e.log[-20000:],
+                        },
+                    )
+
+            if success:
+                with open(os.path.join(temp_dir, output_pdf_name(rel_main)), "rb") as f:
+                    pdf_bytes = f.read()
+
+                return Response(content=pdf_bytes, media_type="application/pdf")
+
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "Erro de compilação LaTeX.", "log": log_output[-20000:]},
+            )
+
+        finally:
+            # Apaga a pasta quer tenha sucesso ou erro
+            await asyncio.to_thread(shutil.rmtree, temp_dir, True)

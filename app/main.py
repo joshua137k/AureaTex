@@ -1,23 +1,82 @@
 import os
+import re
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from core.config import STATIC_DIR
+from core.config import APP_URL, MAX_REQUEST_BYTES, STATIC_DIR
 from core.database import get_pool
-from routers import auth, collab, compile, files, projects, users, invites, references, vscode
+from routers import auth, collab, compile, files, projects, users, invites, references, vscode, ai, mcp
 
-app = FastAPI(title="JoshuaTeX API")
+# A documentação interativa e o esquema da API não ficam expostos em produção.
+app = FastAPI(title="AureaTeX API", docs_url=None, redoc_url=None, openapi_url=None)
 
+# O frontend é servido pela própria app (mesma origem) e o plugin do VS Code
+# não é um browser, por isso não é preciso abrir o CORS a outras origens.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[APP_URL],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Content-Security-Policy: limita de onde vêm scripts e para onde o browser
+# pode enviar dados. As páginas ainda usam onclick="..." e <script> inline,
+# por isso 'unsafe-inline' fica; o ganho principal é connect-src 'self' (um
+# XSS não consegue enviar o token para fora com fetch) e bloquear plugins,
+# <base> e formulários para outros sites.
+_WS_ORIGIN = APP_URL.replace("https://", "wss://").replace("http://", "ws://")
+_CSP = "; ".join([
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
+    "font-src 'self' data: https://fonts.gstatic.com https://cdnjs.cloudflare.com",
+    "img-src 'self' data: blob: https:",
+    f"connect-src 'self' blob: data: {_WS_ORIGIN} https://cdnjs.cloudflare.com",
+    "worker-src 'self' blob: data:",
+    "frame-src 'self' blob:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'self'",
+])
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    length = request.headers.get("content-length")
+
+    if length and length.isdigit() and int(length) > MAX_REQUEST_BYTES:
+        return JSONResponse(status_code=413, content={"detail": "Pedido demasiado grande."})
+
+    response = await call_next(request)
+
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("Content-Security-Policy", _CSP)
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+
+    if APP_URL.startswith("https://"):
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+
+    path = request.url.path
+
+    if path.startswith("/api/") or path.startswith("/auth/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+    elif path.startswith("/app/") or path == "/" or (
+        path.startswith("/static/") and not path.startswith("/static/pdfjs/")
+    ):
+        # HTML/JS/CSS da app: o browser confirma sempre se há versão nova,
+        # para ninguém ficar com um editor antigo em cache.
+        response.headers.setdefault("Cache-Control", "no-cache")
+
+    return response
+
 
 # ---------------------------------------------------------------------------
 # Routers
@@ -32,6 +91,8 @@ app.include_router(collab.router)
 app.include_router(invites.router)
 app.include_router(references.router)
 app.include_router(vscode.router)
+app.include_router(ai.router)
+app.include_router(mcp.router)
 
 # ---------------------------------------------------------------------------
 # Static frontend
@@ -41,27 +102,58 @@ if os.path.isdir(STATIC_DIR):
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+_ASSET_RE = re.compile(r'(href|src)="(/static/[^"?#]+\.(?:css|js))(?:\?[^"]*)?"')
+
+
+def _html_page(path: str) -> HTMLResponse:
+    """
+    Serve uma página HTML acrescentando ?v=<data de modificação> a cada CSS/JS
+    local. O Cloudflare (e o browser) guardam CSS/JS em cache durante horas;
+    com a versão no URL, uma alteração a um ficheiro chega logo a toda a gente
+    em vez de o HTML novo ser combinado com o CSS antigo.
+    """
+    with open(path, "r", encoding="utf-8") as fh:
+        html = fh.read()
+
+    def add_version(match):
+        url = match.group(2)
+        file_path = os.path.join(STATIC_DIR, url[len("/static/"):])
+
+        try:
+            version = int(os.path.getmtime(file_path))
+        except OSError:
+            return match.group(0)
+
+        return f'{match.group(1)}="{url}?v={version}"'
+
+    return HTMLResponse(_ASSET_RE.sub(add_version, html), headers={"Cache-Control": "no-store"})
+
+
 @app.get("/")
 def root():
     # Serve the landing page at the root of /static first.
-    landing_path = os.path.join(STATIC_DIR, "index.html")
-    if os.path.exists(landing_path):
-        return FileResponse(landing_path)
+    for candidate in ("index.html", os.path.join("login", "index.html")):
+        page = os.path.join(STATIC_DIR, candidate)
+        if os.path.isfile(page):
+            return _html_page(page)
 
-    # Fall back to the login page if no landing page is present.
-    login_path = os.path.join(STATIC_DIR, "login", "index.html")
-    if os.path.exists(login_path):
-        return FileResponse(login_path)
-
-    return {"status": "JoshuaTeX API online. Place the HTML files in /app/static/"}
+    return {"status": "AureaTeX API online. Place the HTML files in /app/static/"}
 
 
 @app.get("/app/{page}")
 def serve_page(page: str):
-    path = os.path.join(STATIC_DIR, f"{page}/index.html")
-    if os.path.exists(path):
-        return FileResponse(path)
-    raise HTTPException(status_code=404, detail=f"Page '{page}' not found.")
+    if not re.fullmatch(r"[a-z0-9_-]{1,40}", page):
+        raise HTTPException(status_code=404, detail="Page not found.")
+
+    path = os.path.join(STATIC_DIR, page, "index.html")
+    if os.path.isfile(path):
+        return _html_page(path)
+    raise HTTPException(status_code=404, detail="Page not found.")
+
+
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
 
 
 # ---------------------------------------------------------------------------
@@ -180,4 +272,45 @@ async def startup():
                 ADD COLUMN IF NOT EXISTS remote_provider VARCHAR(20) DEFAULT 'gitea',
                 ADD COLUMN IF NOT EXISTS remote_repo VARCHAR(255)
             """)
+            await cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_history_file
+                ON project_file_history (project_id, filename, saved_at)
+            """)
+            await cur.execute("""
+                CREATE INDEX IF NOT EXISTS idx_compile_project
+                ON compile_log (project_id, id)
+            """)
+            # Tokens emitidos antes desta data deixam de valer (mudança de
+            # password / terminar sessão em todos os dispositivos).
+            await cur.execute("""
+                ALTER TABLE users
+                ADD COLUMN IF NOT EXISTS tokens_valid_after DATETIME(3) NULL
+            """)
+            # Tokens de acesso para clientes MCP (Claude, Cursor...). Só o
+            # SHA-256 fica guardado; o token em claro é mostrado uma vez.
+            await cur.execute("""
+                CREATE TABLE IF NOT EXISTS api_tokens (
+                    id           INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id      INT NOT NULL,
+                    name         VARCHAR(100) NOT NULL,
+                    token_hash   CHAR(64) NOT NULL UNIQUE,
+                    prefix       VARCHAR(16) NOT NULL,
+                    scope        ENUM('read','write') NOT NULL DEFAULT 'read',
+                    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    last_used_at DATETIME NULL,
+                    expires_at   DATETIME NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            """)
+        await conn.commit()
     print("✅ MariaDB tables created / verified.")
+
+
+@app.on_event("shutdown")
+async def shutdown():
+    # Grava o que ainda estiver só em memória antes de o processo terminar.
+    for project_id in list(collab._rooms.keys()):
+        try:
+            await collab.flush_project(project_id)
+        except Exception as e:
+            print(f"[shutdown] Erro ao gravar projeto {project_id}: {e}")

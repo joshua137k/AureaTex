@@ -43,6 +43,7 @@ services:
 
       # -- App Settings --
       APP_URL:            http://localhost:8111
+      # Gera um valor longo e aleatório, ex.: openssl rand -base64 48
       JWT_SECRET:         change-this-secret-for-production
 
       # -- Database --

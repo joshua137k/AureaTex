@@ -4,16 +4,14 @@ let selectedHistoryId = null;
 
 
 
-if (!document.getElementById('ftree-styles')) {
-  const s = document.createElement('style');
-  s.id = 'ftree-styles';
-  s.textContent = `
-    .drag-over-folder { background: rgba(37, 99, 235, 0.1) !important; outline: 1px dashed #2563EB; border-radius: 4px; }
-    .ftree-action { color: #aaa; font-size: 0.85rem; margin-left: 0.4rem; cursor: pointer; line-height: 0; }
-    .ftree-action:hover { color: #16A34A; }
-    .ftree-item, .ftree-folder-title { transition: background 0.1s; }
-  `;
-  document.head.appendChild(s);
+const TEXT_EXTENSIONS = ['.tex', '.bib', '.cls', '.sty', '.txt', '.md', '.m', '.nv', '.bst', '.bbx', '.cbx',
+  '.lco', '.def', '.cfg', '.clo', '.dtx', '.ins', '.tikz', '.csv', '.json', '.yml', '.yaml', '.gitignore', '.latexmkrc'];
+
+function isTextFileName(filename) {
+  const name = filename.toLowerCase();
+  const base = name.split('/').pop();
+  return TEXT_EXTENSIONS.some(ext => name.endsWith(ext)) ||
+         base.includes('license') || base.includes('makefile') || base === 'readme';
 }
 
 async function loadProject() {
@@ -24,8 +22,13 @@ async function loadProject() {
     if (!res.ok) throw new Error('Project not found');
     const p = await res.json();
     document.getElementById('projectTitle').value = p.name;
+    document.title = `${p.name} - AureaTeX`;
+    applyRoleToUI(p.role);
+
+    // Só o dono pode mudar o nome do projeto.
+    document.getElementById('projectTitle').readOnly = p.role !== 'owner';
   } catch (e) {
-    alert(e.message);
+    await uiAlert(e.message, { title: 'Could not open the project' });
     window.location.href = '/app/projects';
   }
 }
@@ -42,7 +45,7 @@ async function openHistoryModal() {
   
   document.getElementById('historyModal').style.display = 'flex';
   document.getElementById('historyFileName').textContent = f.name;
-  document.getElementById('historyList').innerHTML = '<div style="text-align:center;padding:2rem;color:#888;">Searching through time...</div>';
+  document.getElementById('historyList').innerHTML = '<div class="history-placeholder">Loading versions…</div>';
   document.getElementById('btnRestoreHistory').disabled = true;
   selectedHistoryId = null;
   
@@ -51,7 +54,7 @@ async function openHistoryModal() {
     historyEditor = monaco.editor.create(document.getElementById('historyMonaco'), {
       value: '// Choose a version from the sidebar...',
       language: languageForFile(f.name),
-      theme: 'joshuatex-light',
+      theme: monacoThemeName(),
       readOnly: true,
       minimap: { enabled: false },
       fontFamily: "'JetBrains Mono', monospace",
@@ -62,7 +65,7 @@ async function openHistoryModal() {
   }
   
   try {
-    const res = await fetch(`/api/projects/${projectId}/files/${encodeURIComponent(f.name)}/history`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}/history`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
     const data = await res.json();
@@ -72,7 +75,7 @@ async function openHistoryModal() {
     }
     
     if (!data || data.length === 0) {
-      document.getElementById('historyList').innerHTML = '<div style="padding:1rem;color:#666;font-size:0.85rem;text-align:center;font-weight:bold;">No saved versions for this file yet. Wait for the next autosaves.</div>';
+      document.getElementById('historyList').innerHTML = '<div class="history-placeholder">No saved versions for this file yet. A version is saved every few minutes while you edit.</div>';
       return;
     }
     
@@ -83,15 +86,14 @@ async function openHistoryModal() {
       const name = h.display_name || h.username;
       
       return `
-        <div class="history-item" onclick="loadHistoryPreview(${h.id}, this)" style="padding:0.8rem;border-bottom:1px solid #eee;cursor:pointer;border-left:3px solid transparent;transition:all 0.1s;">
-          <div style="font-weight:700;font-size:0.85rem;color:#111;">${dateStr} at ${timeStr}</div>
-          <!-- Note: escapeHtml(name) is used here to prevent XSS -->
-          <div style="font-size:0.75rem;color:#666;margin-top:2px;">By <strong>${escapeHtml(name)}</strong></div>
+        <div class="history-item" onclick="loadHistoryPreview(${Number(h.id)}, this)">
+          <div class="history-item-date">${dateStr} at ${timeStr}</div>
+          <div class="history-item-author">By <strong>${escapeHtml(name)}</strong></div>
         </div>
       `;
     }).join('');
   } catch(err) {
-    document.getElementById('historyList').innerHTML = `<div style="color:red;padding:1rem;">Error: ${err.message}</div>`;
+    document.getElementById('historyList').innerHTML = `<div class="history-placeholder error">Error: ${escapeHtml(err.message)}</div>`;
   }
 }
 
@@ -100,13 +102,8 @@ function closeHistoryModal() {
 }
 
 async function loadHistoryPreview(id, element) {
-  document.querySelectorAll('.history-item').forEach(el => {
-    el.style.background = 'transparent';
-    el.style.borderLeftColor = 'transparent';
-  });
-  
-  element.style.background = '#FFE8E8';
-  element.style.borderLeftColor = '#E03030';
+  document.querySelectorAll('.history-item').forEach(el => el.classList.remove('selected'));
+  element.classList.add('selected');
   
   selectedHistoryId = id;
   document.getElementById('btnRestoreHistory').disabled = false;
@@ -127,22 +124,22 @@ async function restoreSelectedHistory() {
   if (!selectedHistoryId || activeFile < 0) return;
   const f = files[activeFile];
   
-  if(!confirm('🚨 WARNING: This will replace the current text of this file with the version shown on screen. Do you really want to go back in time?')) return;
+  if(!await uiConfirm('The current text of this file will be replaced by the version shown on screen.', { title: 'Restore this version?', okText: 'Restore', danger: true })) return;
   
   const btn = document.getElementById('btnRestoreHistory');
   btn.disabled = true;
   btn.textContent = 'Restoring...';
   
   try {
-    const res = await fetch(`/api/projects/${projectId}/files/${encodeURIComponent(f.name)}/restore/${selectedHistoryId}`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}/restore/${selectedHistoryId}`, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${token}` }
     });
     
-    if(!res.ok) throw new Error('Error restoring the version.');
-    
+    if(!res.ok) throw new Error(await apiError(res, 'Error restoring the version.'));
+
     closeHistoryModal();
-    alert('Version restored successfully!');
+    document.getElementById('statusText').textContent = 'Version restored';
   } catch(err) {
     alert(err.message);
   } finally {
@@ -157,14 +154,18 @@ async function updateProjectName() {
   if (!newName) return;
   document.getElementById('statusText').textContent = 'Saving title...';
   try {
-    await fetch(`/api/projects/${projectId}`, {
+    const res = await fetch(`/api/projects/${projectId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ name: newName })
     });
+    if (!res.ok) throw new Error(await apiError(res, 'Error saving title.'));
+    document.title = `${newName} - AureaTeX`;
     document.getElementById('statusText').textContent = 'Saved';
-  } catch {
+  } catch (err) {
     document.getElementById('statusText').textContent = 'Error saving';
+    alert(err.message);
+    loadProject();
   }
 }
 
@@ -172,18 +173,18 @@ async function loadFiles() {
   const res = await fetch(`/api/projects/${projectId}/files`, {
     headers: { 'Authorization': `Bearer ${token}` }
   });
+  if (handleAuthFailure(res)) return;
+  if (!res.ok) throw new Error(await apiError(res, 'Error loading files.'));
   const data = await res.json();
 
+  // Os separadores guardam índices do array `files`: preserva-os pelo nome.
   const oldFiles = files;
+  const openNames = openTabs.map(i => oldFiles[i]?.name).filter(Boolean);
+  const activeName = activeFile >= 0 ? oldFiles[activeFile]?.name : null;
 
   files = data.map(f => {
-    const name = f.filename.toLowerCase();
-    const isText = name.endsWith('.tex') || name.endsWith('.bib') ||
-                   name.endsWith('.cls') || name.endsWith('.sty') ||
-                   name.endsWith('.txt') || name.endsWith('.md') ||
-                   name.endsWith('.m') || name.endsWith('.nv') ||
-                   name.includes('license') || name.includes('makefile');
-                   
+    const isText = isTextFileName(f.filename);
+                                      
     const oldF = oldFiles.find(x => x.name === f.filename);
     const preservedContent = (oldF && oldF.content !== null) ? oldF.content : null;
 
@@ -191,6 +192,12 @@ async function loadFiles() {
   });
 
   files.sort((a, b) => (b.is_main ? 1 : 0) - (a.is_main ? 1 : 0));
+
+  if (oldFiles.length) {
+    openTabs = openNames.map(n => files.findIndex(f => f.name === n)).filter(i => i >= 0);
+    activeFile = activeName ? files.findIndex(f => f.name === activeName) : -1;
+  }
+
   renderTabs();
   renderFileTree();
 }
@@ -214,7 +221,7 @@ async function getOrCreateModel(filename) {
   
   if (!wsReady) {
     try {
-      const res = await fetch(`/api/projects/${projectId}/files/${filename}?t=${Date.now()}`, {
+      const res = await fetch(`/api/projects/${projectId}/files/${encPath(filename)}?t=${Date.now()}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -253,7 +260,7 @@ async function switchFile(index) {
     if (collab) collab.leaveFile();
     if (f.content === null) {
       try {
-        const res = await fetch(`/api/projects/${projectId}/files/${f.name}?t=${Date.now()}`, {
+        const res = await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}?t=${Date.now()}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -276,11 +283,15 @@ async function switchFile(index) {
 
   if (collab) {
     document.getElementById('statusText').textContent = 'Syncing...';
-    await collab.joinFile(f.name);
-    document.getElementById('statusText').textContent = 'Ready';
-  }
+    const synced = await collab.joinFile(f.name);
 
-  if (editor) editor.updateOptions({ readOnly: false });
+    // Só se pode escrever depois de o servidor enviar o documento; sem isso
+    // o editor fica só de leitura até a ligação voltar.
+    if (editor) editor.updateOptions({ readOnly: !synced || isViewer() });
+    document.getElementById('statusText').textContent = synced ? 'Ready' : 'Reconnecting...';
+  } else if (editor) {
+    editor.updateOptions({ readOnly: isViewer() });
+  }
 
   setTimeout(() => editor.layout(), 10);
   renderTabs();
@@ -297,14 +308,8 @@ function _showBinary(f) {
   monacoEl.style.display = 'none';
   imgEl.style.display = 'flex';
 
-  if (isImg) {
-    document.getElementById('previewImg').src = f.content;
-    document.getElementById('imageInfo').textContent = f.name;
-  } else {
-    document.getElementById('previewImg').src = '';
-    document.getElementById('imageInfo').textContent =
-      `Binary file: ${f.name} (Cannot be previewed)`;
-  }
+  // Visualizador com zoom, recorte e rotação (image.js).
+  openImageViewer(f, isImg);
 }
 
 function scheduleSave() {
@@ -333,7 +338,7 @@ async function saveFile() {
 
   const content = editor.getValue();
   try {
-    await fetch(`/api/projects/${projectId}/files/${f.name}`, {
+    await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ content })
@@ -348,7 +353,7 @@ async function newFile(basePath = '', event = null) {
   if (event) event.stopPropagation();
   
   const defaultName = basePath ? `${basePath}/new.tex` : 'new.tex';
-  let name = prompt('File name (e.g.: new.tex, script.nv):', defaultName);
+  let name = await uiPrompt('New file', defaultName, { title: 'New file', okText: 'Create', placeholder: 'e.g. chapter1.tex' });
   if (!name) return;
   
   name = name.replace(/\/+/g, '/').replace(/^\/+/, '');
@@ -357,20 +362,32 @@ async function newFile(basePath = '', event = null) {
     ? '% new script\n'
     : '% New file';
     
+  if (files.some(f => f.name === name)) {
+    alert(`A file named '${name}' already exists.`);
+    return;
+  }
+
   try {
-    await fetch(`/api/projects/${projectId}/files/${name}`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(name)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ content: defaultContent })
     });
-    files.push({ name, content: defaultContent, binary: false, is_main: false });
-    
+    if (!res.ok) throw new Error(await apiError(res, 'Error creating file on server.'));
+
+    // O aviso "file_added" do servidor pode já ter acrescentado a entrada.
+    let idx = files.findIndex(f => f.name === name);
+    if (idx === -1) {
+      files.push({ name, content: null, binary: !isTextFileName(name), is_main: false });
+      idx = files.length - 1;
+    }
+
     if (basePath) folderStates[basePath] = true;
     saveFolderStates();
-    
-    await switchFile(files.length - 1);
-  } catch {
-    alert('Error creating file on server.');
+
+    await switchFile(idx);
+  } catch (err) {
+    alert(err.message);
   }
 }
 
@@ -378,19 +395,23 @@ async function newFolder(basePath = '', event = null) {
   if (event) event.stopPropagation();
   
   const defaultName = basePath ? `${basePath}/new_folder` : 'new_folder';
-  let name = prompt('Folder name (e.g.: images, chapters):', defaultName);
+  let name = await uiPrompt('New folder', defaultName, { title: 'New folder', okText: 'Create', placeholder: 'e.g. figures' });
   if (!name) return;
   
   name = name.replace(/\/+/g, '/').replace(/^\/+/, '').replace(/\/+$/, '');
   const dummyFile = `${name}/.keep`;
 
   try {
-    await fetch(`/api/projects/${projectId}/files/${dummyFile}`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(dummyFile)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ content: '' })
     });
-    files.push({ name: dummyFile, content: '', binary: false, is_main: false });
+    if (!res.ok) throw new Error(await apiError(res, 'Error creating folder on server.'));
+
+    if (!files.some(f => f.name === dummyFile)) {
+      files.push({ name: dummyFile, content: '', binary: false, is_main: false });
+    }
     
     folderStates[name] = true;
     if (basePath) folderStates[basePath] = true;
@@ -399,14 +420,14 @@ async function newFolder(basePath = '', event = null) {
     renderTabs();
     renderFileTree();
     document.getElementById('statusText').textContent = 'Folder created';
-  } catch {
-    alert('Error creating folder on server.');
+  } catch (err) {
+    alert(err.message);
   }
 }
 
 async function deleteFolder(folderPath, event) {
   if (event) event.stopPropagation();
-  if (!confirm(`Are you sure you want to delete the folder '${folderPath}' and ALL its files?`)) return;
+  if (!await uiConfirm(`The folder '${folderPath}' and ALL its files will be deleted.`, { title: 'Delete folder?', danger: true })) return;
 
   document.getElementById('statusText').textContent = 'Deleting folder...';
 
@@ -422,11 +443,12 @@ async function deleteFolder(folderPath, event) {
 
   try {
     for (const f of filesToDelete) {
-      await fetch(`/api/projects/${projectId}/files/${f.name}`, {
+      const res = await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      
+      if (!res.ok && res.status !== 404) throw new Error(await apiError(res, 'Error deleting the folder.'));
+
       const idx = files.findIndex(x => x.name === f.name);
       if (idx !== -1) {
         const wasActive = (activeFile === idx);
@@ -459,7 +481,9 @@ async function deleteFolder(folderPath, event) {
     renderFileTree();
     document.getElementById('statusText').textContent = 'Folder deleted';
   } catch (err) {
-    alert('Error deleting the folder.');
+    alert(err.message || 'Error deleting the folder.');
+    renderTabs();
+    renderFileTree();
   }
 }
 
@@ -469,9 +493,12 @@ async function handleFileUpload(event) {
   document.getElementById('statusText').textContent = 'Uploading...';
 
   for (const file of uploaded) {
-    const isTextFile = file.name.endsWith('.tex') || file.name.endsWith('.bib') ||
-                        file.name.endsWith('.sty') || file.name.endsWith('.cls') ||
-                        file.name.endsWith('.m') || file.name.endsWith('.nv');
+    const isTextFile = isTextFileName(file.name);
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert(`'${file.name}' is larger than 10 MB and cannot be uploaded.`);
+      continue;
+    }
 
     const content = await new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -482,11 +509,12 @@ async function handleFileUpload(event) {
     });
 
     try {
-      await fetch(`/api/projects/${projectId}/files/${file.name}`, {
+      const res = await fetch(`/api/projects/${projectId}/files/${encPath(file.name)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ content })
       });
+      if (!res.ok) throw new Error(await apiError(res, 'Error uploading file: ' + file.name));
       const isBinary = !isTextFile;
       const idx = files.findIndex(f => f.name === file.name);
       if (idx >= 0) { files[idx].content = content; files[idx].binary = isBinary; openModels.delete(file.name); }
@@ -494,8 +522,8 @@ async function handleFileUpload(event) {
       renderTabs();
       renderFileTree();
       document.getElementById('statusText').textContent = 'Upload complete';
-    } catch {
-      alert('Error uploading file: ' + file.name);
+    } catch (err) {
+      alert(err.message);
       document.getElementById('statusText').textContent = 'Error';
     }
   }
@@ -504,7 +532,7 @@ async function handleFileUpload(event) {
 
 async function moveOrRenameFile(oldName, newName, reRender = true) {
   try {
-    const res = await fetch(`/api/projects/${projectId}/files/${encodeURIComponent(oldName)}/rename`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(oldName)}/rename`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body: JSON.stringify({ new_name: newName })
@@ -523,7 +551,7 @@ async function moveOrRenameFile(oldName, newName, reRender = true) {
 async function promptRenameFile(index, event) {
   if (event) event.stopPropagation();
   const f = files[index];
-  const newName = prompt(`Rename "${f.name}" to:`, f.name);
+  const newName = await uiPrompt(`Rename or move "${f.name}". Use / for folders.`, f.name, { title: 'Rename file', okText: 'Rename' });
   if (!newName || newName === f.name) return;
 
   await moveOrRenameFile(f.name, newName, true);
@@ -558,12 +586,12 @@ async function deleteFile(index, event) {
     alert("You can't delete the project's main file.");
     return;
   }
-  if (!confirm(`Are you sure you want to permanently delete the file '${f.name}'?`)) return;
+  if (!await uiConfirm(`'${f.name}' will be permanently deleted.`, { title: 'Delete file?', danger: true })) return;
 
   document.getElementById('statusText').textContent = 'Deleting...';
 
   try {
-    const res = await fetch(`/api/projects/${projectId}/files/${f.name}`, {
+    const res = await fetch(`/api/projects/${projectId}/files/${encPath(f.name)}`, {
       method: 'DELETE',
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -605,14 +633,14 @@ async function deleteFile(index, event) {
   }
 }
 
-async function setMainFile() {
-  const f = files[activeFile];
+async function setMainFile(index = activeFile) {
+  const f = files[index];
   if (!f || f.binary || !f.name.endsWith('.tex')) {
     alert('Only .tex files can be set as the main file.');
     return;
   }
   try {
-    const res = await fetch(`/api/projects/${projectId}/set-main/${f.name}`, {
+    const res = await fetch(`/api/projects/${projectId}/set-main/${encPath(f.name)}`, {
       method: 'PUT',
       headers: { 'Authorization': `Bearer ${token}` }
     });
@@ -620,6 +648,7 @@ async function setMainFile() {
     files.forEach(file => file.is_main = false);
     f.is_main = true;
     renderFileTree();
+    renderTabs();
     document.getElementById('statusText').textContent = `${f.name} is now the main file`;
   } catch (err) {
     alert(err.message);
@@ -627,6 +656,7 @@ async function setMainFile() {
 }
 
 function renderTabs() {
+  if (typeof updateCompileTarget === 'function') updateCompileTarget();
   const tabs = document.getElementById('editorTabs');
   if (!openTabs.length) {
     tabs.innerHTML = '';
@@ -635,6 +665,7 @@ function renderTabs() {
     return;
   }
   tabs.innerHTML = '';
+  openTabs = openTabs.filter(i => files[i]);
   openTabs.forEach(i => {
     const f = files[i];
     const tab = document.createElement('div');
@@ -642,12 +673,9 @@ function renderTabs() {
     tab.draggable = true;
     tab.dataset.index = i;
     tab.innerHTML = `
-      <svg width="12" height="12" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.5">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-        <polyline points="14,2 14,8 20,8"/>
-      </svg>
-      <span class="tab-name">${f.name.split('/').pop()}</span>
-      <span class="tab-close">×</span>
+      ${fileIcon(f)}
+      <span class="tab-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name.split('/').pop())}</span>
+      <span class="tab-close" title="Close">×</span>
     `;
     tab.addEventListener('click', (e) => {
       if (e.target.closest('.tab-close')) return;
@@ -710,9 +738,10 @@ function saveFolderStates() {
 function toggleFolder(folderId, fullPath) {
   const el = document.getElementById(folderId);
   const icon = document.getElementById('icon-' + folderId);
+  if (!el) return;
   const open = el.style.display === 'none';
   el.style.display = open ? 'block' : 'none';
-  icon.textContent = open ? '▼' : '▶';
+  if (icon) icon.classList.toggle('open', open);
   folderStates[fullPath] = open;
   saveFolderStates();
 }
@@ -779,6 +808,50 @@ window.onDropToTreeFolder = async function(event, targetFolder) {
 };
 
 
+// ---------------------------------------------------------------------------
+// Ícones
+// ---------------------------------------------------------------------------
+const ICONS = {
+  chevron: '<polyline points="9 6 15 12 9 18"/>',
+  folder:  '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  file:    '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  tex:     '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>',
+  bib:     '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>',
+  image:   '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  code:    '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  style:   '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
+  newFile: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="18"/><line x1="9" y1="15" x2="15" y2="15"/>',
+  newFolder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>',
+  rename:  '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  ai:      '<path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z"/><path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z"/>',
+  trash:   '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>',
+};
+
+function svgIcon(name, cls = '') {
+  return `<svg class="${cls}" viewBox="0 0 24 24">${ICONS[name]}</svg>`;
+}
+
+// Ícone (e cor) conforme o tipo de ficheiro.
+function fileKind(f) {
+  const name = f.name.toLowerCase();
+  if (name.endsWith('.tex')) return 'tex';
+  if (name.endsWith('.bib')) return 'bib';
+  if (/\.(png|jpe?g|gif|svg|webp|bmp|eps)$/.test(name)) return 'image';
+  if (name.endsWith('.pdf')) return 'pdf';
+  if (/\.(cls|sty|bst|bbx|cbx|def|clo)$/.test(name)) return 'style';
+  if (/\.(m|nv|py|js|json|yml|yaml|sh)$/.test(name)) return 'code';
+  return 'file';
+}
+
+function fileIcon(f, extraClass = '') {
+  const kind = fileKind(f);
+  const shape = { tex: 'tex', bib: 'bib', image: 'image', pdf: 'file', style: 'style', code: 'code', file: 'file' }[kind];
+  return svgIcon(shape, `ftree-icon is-${kind} ${extraClass}`.trim());
+}
+
+// ---------------------------------------------------------------------------
+// Árvore de ficheiros
+// ---------------------------------------------------------------------------
 function renderFileTree() {
   const body = document.getElementById('filetreeBody');
   if (!body) return;
@@ -795,41 +868,39 @@ function renderFileTree() {
     node.files.push({ file: f, originalIndex: index });
   });
 
+  const INDENT = 14;
+  const BASE = 8;
+  const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+
   function createHTML(node, pathName, level) {
     let html = '';
-    const pad = level * 14;
+    const pad = BASE + level * INDENT;
 
-    Object.keys(node.folders).sort().forEach(folderName => {
+    Object.keys(node.folders).sort(byName).forEach(folderName => {
       const fullPath = pathName + folderName;
       const folderId = 'folder-' + btoa(unescape(encodeURIComponent(fullPath))).replace(/[^a-zA-Z0-9]/g, '');
       const isOpen = folderStates[fullPath] !== false;
-      
+
       html += `
-        <div class="ftree-folder"
+        <div class="ftree-row ftree-folder-row" style="padding-left:${pad}px"
+          title="${escapeHtml(fullPath)}" data-folder="${escapeHtml(fullPath)}"
           draggable="true"
-          ondragstart="onDragStartTreeItem(event, '${fullPath}', true)"
+          onclick="toggleFolder('${folderId}',${jsAttr(fullPath)})"
+          ondragstart="onDragStartTreeItem(event, ${jsAttr(fullPath)}, true)"
           ondragover="onDragOverTreeFolder(event)"
           ondragleave="onDragLeaveTreeFolder(event)"
-          ondrop="onDropToTreeFolder(event, '${fullPath}')"
-          style="padding-left:${pad + 16}px;cursor:pointer;user-select:none;margin-top:0.2rem;display:flex;align-items:center;padding-right:0.5rem;"
-          title="${folderName}">
-          
-          <div onclick="toggleFolder('${folderId}','${fullPath}')" class="ftree-folder-title" style="display:flex;align-items:center;flex:1;overflow:hidden;padding: 2px 0;">
-            <span id="icon-${folderId}" style="margin-right:6px;font-size:10px;width:10px;display:inline-block;text-align:center;">${isOpen ? '▼' : '▶'}</span>
-            <svg width="14" height="14" viewBox="0 0 24 24" stroke="#999" fill="none" stroke-width="2.5" style="margin-right:6px;flex-shrink:0;">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${folderName}</span>
-          </div>
-          
-          <div style="display:flex; align-items:center; opacity: 0.8;">
-            <span onclick="newFile('${fullPath}', event)" title="New file here" class="ftree-action">📄+</span>
-            <span onclick="newFolder('${fullPath}', event)" title="New folder here" class="ftree-action">📁+</span>
-            <span onclick="deleteFolder('${fullPath}', event)" title="Delete folder" class="ftree-action" style="font-size:1.1rem" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>
-          </div>
-          
+          ondrop="onDropToTreeFolder(event, ${jsAttr(fullPath)})">
+          <svg id="icon-${folderId}" class="ftree-chevron ${isOpen ? 'open' : ''}" viewBox="0 0 24 24">${ICONS.chevron}</svg>
+          ${svgIcon('folder', 'ftree-icon is-folder')}
+          <span class="ftree-name">${escapeHtml(folderName)}</span>
+          <span class="ftree-actions">
+            <button class="ftree-act ai-act" title="Copy this folder for AI" onclick="event.stopPropagation(); copyForAI('full', ${jsAttr(fullPath)})">${svgIcon('ai')}</button>
+            <button class="ftree-act" title="New file in this folder" onclick="newFile(${jsAttr(fullPath)}, event)">${svgIcon('newFile')}</button>
+            <button class="ftree-act" title="New folder in this folder" onclick="newFolder(${jsAttr(fullPath)}, event)">${svgIcon('newFolder')}</button>
+            <button class="ftree-act danger" title="Delete folder" onclick="deleteFolder(${jsAttr(fullPath)}, event)">${svgIcon('trash')}</button>
+          </span>
         </div>
-        <div id="${folderId}" style="display:${isOpen ? 'block' : 'none'};">
+        <div id="${folderId}" class="ftree-children" style="display:${isOpen ? 'block' : 'none'};--guide:${pad + 7}">
           ${createHTML(node.folders[folderName], fullPath + '/', level + 1)}
         </div>
       `;
@@ -839,55 +910,45 @@ function renderFileTree() {
       .sort((a, b) => {
         if (a.file.is_main && !b.file.is_main) return -1;
         if (!a.file.is_main && b.file.is_main) return 1;
-        return a.file.name.localeCompare(b.file.name);
+        return byName(a.file.name, b.file.name);
       })
       .forEach(({ file: f, originalIndex: i }) => {
         const fileName = f.name.split('/').pop();
-        
+
+        // Marcador de pasta vazia.
         if (fileName === '.keep') return;
-        
+
         const isActive = i === activeFile ? 'active' : '';
 
-        const starIcon = f.is_main
-          ? `<span title="Main File" style="color:var(--red);font-size:1rem;margin-left:0.3rem;line-height:0;">★</span>`
-          : '';
-
-        const renameIcon = `
-          <span onclick="promptRenameFile(${i}, event)" title="Rename" style="color:#aaa;font-size:0.85rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#2563EB'" onmouseout="this.style.color='#aaa'">✎</span>`;
-
-        const deleteIcon = !f.is_main
-          ? `<span onclick="deleteFile(${i}, event)" title="Delete file" style="color:#aaa;font-size:1.1rem;margin-left:0.4rem;cursor:pointer;line-height:0;" onmouseover="this.style.color='#E03030'" onmouseout="this.style.color='#aaa'">×</span>`
-          : '';
-
-        const icon = f.binary
-          ? `<svg viewBox="0 0 24 24" style="width:14px;height:14px;margin-right:0.4rem;stroke:#111;fill:none;stroke-width:2.5;flex-shrink:0"><rect x="3" y="3" width="18" height="18"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><polyline points="21,15 16,10 5,21"/></svg>`
-          : fileName.endsWith('.bib')
-          ? `<svg viewBox="0 0 24 24" style="width:14px;height:14px;margin-right:0.4rem;stroke:#111;fill:none;stroke-width:2.5;flex-shrink:0"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`
-          : (fileName.endsWith('.m') || fileName.endsWith('.nv'))
-          ? `<svg viewBox="0 0 24 24" style="width:14px;height:14px;margin-right:0.4rem;stroke:#16A34A;fill:none;stroke-width:2.5;flex-shrink:0"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`
-          : `<svg viewBox="0 0 24 24" style="width:14px;height:14px;margin-right:0.4rem;stroke:#111;fill:none;stroke-width:2.5;flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg>`;
-
         html += `
-          <div class="ftree-item ${isActive}" style="padding-left:${pad + 16}px;" title="${f.name}"
-            draggable="true" ondragstart="onDragStartTreeItem(event, '${f.name}', false)">
-            <div style="display:flex;align-items:center;flex:1;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" onclick="switchFile(${i})">
-              ${icon}<span style="overflow:hidden;text-overflow:ellipsis;flex:1">${fileName}</span>
-            </div>
-            <div style="display:flex;align-items:center;margin-left:auto;">
-              ${starIcon}${renameIcon}${deleteIcon}
-            </div>
+          <div class="ftree-row ftree-file-row ${isActive}" style="padding-left:${pad}px" data-index="${i}"
+            title="${escapeHtml(f.name)}${f.is_main ? ' (main file)' : ''}"
+            draggable="true"
+            onclick="switchFile(${i})"
+            ondragstart="onDragStartTreeItem(event, ${jsAttr(f.name)}, false)">
+            <span class="ftree-chevron-spacer"></span>
+            ${fileIcon(f)}
+            <span class="ftree-name">${escapeHtml(fileName)}</span>
+            ${f.is_main ? '<span class="ftree-main-badge">main</span>' : ''}
+            <span class="ftree-actions">
+              ${f.binary ? '' : `<button class="ftree-act ai-act" title="Copy this file for AI" onclick="event.stopPropagation(); copyForAI('full', ${jsAttr(f.name)})">${svgIcon('ai')}</button>`}
+              <button class="ftree-act" title="Rename / move" onclick="promptRenameFile(${i}, event)">${svgIcon('rename')}</button>
+              ${f.is_main ? '' : `<button class="ftree-act danger" title="Delete file" onclick="deleteFile(${i}, event)">${svgIcon('trash')}</button>`}
+            </span>
           </div>
         `;
       });
     return html;
   }
 
+  const content = createHTML(tree, '', 0);
+
   body.innerHTML = `
-    <div style="min-height:100%; padding-bottom: 2rem;"
+    <div class="ftree-root"
          ondragover="onDragOverTreeFolder(event)"
          ondragleave="onDragLeaveTreeFolder(event)"
          ondrop="onDropToTreeFolder(event, '')">
-      ${createHTML(tree, '', 0)}
+      ${content.trim() ? content : '<div class="ftree-empty">No files yet.<br>Create or upload one above.</div>'}
     </div>
   `;
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AureaTeX — Your Self-Hosted LaTeX Editor</title>
+  <title>AureaTeX</title>
   <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v=2">
   
@@ -385,6 +385,11 @@
 
     .card-git h3, .card-vscode h3 { color: var(--white); }
 
+    .vscode-download { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-top: 1.2rem; }
+    .vscode-version { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; opacity: 0.85; }
+    .vscode-steps { margin: 1.1rem 0 0 1.2rem; font-size: 0.85rem; line-height: 1.55; opacity: 0.95; text-align: left; }
+    .vscode-steps li + li { margin-top: 0.25rem; }
+
     .icon-box {
       width: 44px;
       height: 44px;
@@ -500,6 +505,70 @@
     .success { color: var(--green); font-weight: 700; }
     .blink { animation: blink 1s step-end infinite; }
 
+    /* ---- Cartões novos (v1.1) ---- */
+    .card-editor { grid-column: span 2; background: var(--white); }
+    .card-images { grid-column: span 1; background: var(--green); color: var(--white); }
+    .card-export { grid-column: span 1; background: var(--white); }
+    /* Ícones SVG (sem emojis) */
+    .ico { display: block; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+    .icon-box .ico { width: 22px; height: 22px; }
+    .ai-ico .ico { width: 16px; height: 16px; }
+    .toast-ico { display: inline-flex; width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: var(--white); align-items: center; justify-content: center; }
+    .toast-ico .ico { width: 14px; height: 14px; stroke-width: 3; }
+    .card-images h3 { color: var(--white); }
+    .card-images .icon-box { background: var(--white); color: var(--ink); }
+    .feature-list { list-style: none; margin-top: 1rem; display: grid; gap: 0.45rem; }
+    .feature-list li { position: relative; padding-left: 1.3rem; font-size: 0.88rem; line-height: 1.55; }
+    .feature-list li::before { content: "→"; position: absolute; left: 0; top: 0; font-weight: 900; color: var(--red); }
+    .feature-list code, .bento-card code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      background: var(--bg); border: 1.5px solid var(--ink); border-radius: 5px; padding: 0 0.3rem;
+    }
+    .mini-btns { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
+    .mini-btns span {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; font-weight: 700;
+      padding: 0.25rem 0.7rem; border: 2px solid var(--ink); border-radius: 8px;
+      background: var(--bg); box-shadow: 2px 2px 0 var(--ink);
+    }
+    .badge-new {
+      display: inline-block; margin-left: 0.4rem; vertical-align: middle;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.04em;
+      padding: 0.1rem 0.4rem; background: var(--red); color: var(--white);
+      border: 2px solid var(--ink); border-radius: 6px;
+    }
+
+    /* ---- Secção IA / MCP ---- */
+    .ai-section {
+      padding: 6rem 5%;
+      background: var(--ink);
+      color: var(--white);
+      border-top: 3.5px solid var(--ink);
+    }
+    .ai-container {
+      display: flex; align-items: center; gap: 4rem;
+      max-width: 1200px; margin: 0 auto; flex-wrap: wrap;
+    }
+    .ai-text { flex: 1.1; min-width: 320px; }
+    .ai-text h2 {
+      font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 900;
+      margin-bottom: 1.2rem; letter-spacing: -0.03em; line-height: 1.15;
+    }
+    .ai-text p { font-size: 1.05rem; color: #CBD5E1; margin-bottom: 1.4rem; line-height: 1.6; }
+    .ai-text p strong { color: var(--white); }
+    .ai-points { list-style: none; display: grid; gap: 0.7rem; margin-bottom: 1.8rem; }
+    .ai-points li { display: flex; gap: 0.75rem; align-items: flex-start; font-size: 0.95rem; line-height: 1.45; color: #E2E8F0; }
+    .ai-points .ai-ico {
+      flex-shrink: 0; width: 30px; height: 30px; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--yellow); color: var(--ink); border: 2px solid var(--white); font-size: 0.95rem;
+    }
+    .ai-section .pill { background: #1E293B; color: var(--white); border-color: var(--white); box-shadow: 2px 2px 0 var(--red); }
+    .ai-section .terminal-window { border-color: var(--white); box-shadow: 10px 10px 0 var(--yellow); }
+    .term-body .t-dim { color: #64748B; }
+    .term-body .t-you { color: var(--yellow); font-weight: 700; }
+    .term-body .t-tool { color: #93C5FD; }
+    .term-body .t-wrap { white-space: pre-wrap; word-break: break-all; }
+
     .footer {
       background: var(--ink);
       color: var(--white);
@@ -613,6 +682,10 @@
       .card-zotero { grid-column: span 1; grid-row: span 1; }
       .card-doi { grid-column: span 1; grid-row: span 1; }
       .card-vscode { grid-column: span 2; grid-row: span 1; flex-direction: column; text-align: center; gap: 1.5rem; }
+      .card-editor { grid-column: span 2; }
+      .card-images, .card-export { grid-column: span 1; }
+      .ai-container { flex-direction: column; }
+      .vscode-download { justify-content: center; }
       .deploy-container { flex-direction: column; text-align: center; }
       .tech-pills { justify-content: center; }
       .marquee { transform: rotate(0); }
@@ -620,7 +693,9 @@
 
     @media (max-width: 600px) {
       .bento-grid { grid-template-columns: 1fr; }
-      .card-collab, .card-git, .card-zotero, .card-doi, .card-vscode { grid-column: span 1; grid-row: span 1; }
+      .card-collab, .card-git, .card-zotero, .card-doi, .card-vscode,
+      .card-editor, .card-images, .card-export { grid-column: span 1; grid-row: span 1; }
+      .ai-text, .deploy-text, .terminal-window { min-width: 0; width: 100%; }
       .card-collab { grid-row: span 2; }
       .toast-notification { right: 0; bottom: -18px; transform: scale(0.85); }
     }
@@ -640,6 +715,8 @@
     </a>
     <div class="nav-links">
       <a href="#features">Features</a>
+      <a href="#ai">AI</a>
+      <a href="#vscode">VS Code Plugin</a>
       <a href="#deploy">Self-Host</a>
       <a href="/app/login" class="btn btn-red" style="padding: 0.5rem 1.2rem; font-size: 0.88rem;">Login →</a>
     </div>
@@ -648,10 +725,10 @@
   <header class="hero">
     <div class="badge">
       <span class="badge-dot"></span>
-      v1.0 Stable now available
+      v1.1 — now connects to your AI (MCP)
     </div>
     <h1>LaTeX, but <span class="text-highlight">fun</span> to write.</h1>
-    <p class="hero-sub">Your self-hosted LaTeX editor with real-time compilation and native Git. No more fighting with configurations. 100% yours, 0% third-party cloud.</p>
+    <p class="hero-sub">Your self-hosted LaTeX editor with real-time compilation, native Git and a direct line to your AI assistant. No more fighting with configurations. 100% yours, 0% third-party cloud.</p>
     
     <div class="hero-buttons">
       <a href="https://github.com/joshua137k/AureaTex" class="btn btn-primary">
@@ -681,7 +758,7 @@
         </div>
       </div>
       <div class="toast-notification">
-        <span style="font-size: 1.2rem;">✅</span>
+        <span class="toast-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg></span>
         <span>PDF compiled in 1.2s</span>
       </div>
     </div>
@@ -696,6 +773,8 @@
       <span class="marquee-item">Monaco Editor</span>
       <span class="marquee-item">Zotero API</span>
       <span class="marquee-item">CrossRef</span>
+      <span class="marquee-item">MCP</span>
+      <span class="marquee-item">Claude · Cursor · opencode</span>
       <span class="marquee-item">Docker</span>
       <span class="marquee-item">TeX Live Full</span>
       <span class="marquee-item">Native Gitea</span>
@@ -703,6 +782,8 @@
       <span class="marquee-item">Monaco Editor</span>
       <span class="marquee-item">Zotero API</span>
       <span class="marquee-item">CrossRef</span>
+      <span class="marquee-item">MCP</span>
+      <span class="marquee-item">Claude · Cursor · opencode</span>
     </div>
   </div>
 
@@ -715,7 +796,7 @@
     <div class="bento-grid">
       <div class="bento-card card-collab">
         <div>
-          <div class="icon-box">👥</div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
           <h3>Real-Time Collaboration</h3>
           <p>Watch your colleagues' cursors move. Seamless Operational Transformation sync, as if you were all in the same room.</p>
         </div>
@@ -728,7 +809,7 @@
 
       <div class="bento-card card-git">
         <div>
-          <div class="icon-box">🔀</div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg></div>
           <h3>Native Git & Gitea</h3>
           <p>Commits, branches, and version control without leaving the editor. Your code, your rules, your server.</p>
         </div>
@@ -736,7 +817,7 @@
 
       <div class="bento-card card-zotero">
         <div>
-          <div class="icon-box">📚</div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></div>
           <h3>Zotero & CrossRef</h3>
           <p>Drag references straight into your <code>refs.bib</code> with a single click.</p>
         </div>
@@ -744,9 +825,39 @@
 
       <div class="bento-card card-doi">
         <div>
-          <div class="icon-box">⚡</div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
           <h3>Instant Compile</h3>
           <p>Real-time PDF updates powered by local TeX Live Full.</p>
+        </div>
+      </div>
+
+      <div class="bento-card card-editor">
+        <div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></div>
+          <h3>An editor that knows LaTeX <span class="badge-new">NEW</span></h3>
+          <p>Less typing, fewer typos, no more juggling the main file.</p>
+          <ul class="feature-list">
+            <li>Autocomplete for <code>\usepackage</code>, <code>\begin</code>, <code>\cite</code> keys from your .bib and <code>\ref</code> labels</li>
+            <li>Two versions of a paper? Open one and hit Compile — the main file stays untouched</li>
+            <li>A real right-click menu: duplicate, download, set as main, copy for AI</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="bento-card card-images">
+        <div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg></div>
+          <h3>Edit images in place <span class="badge-new">NEW</span></h3>
+          <p>Zoom, crop and rotate figures right in the editor, then save or save as a copy. No round trip to another app.</p>
+        </div>
+      </div>
+
+      <div class="bento-card card-export">
+        <div>
+          <div class="icon-box"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+          <h3>One-click export <span class="badge-new">NEW</span></h3>
+          <p>Grab the compiled PDF or the whole project as a ZIP straight from the project list.</p>
+          <div class="mini-btns"><span>↓ PDF</span><span>↓ ZIP</span></div>
         </div>
       </div>
 
@@ -754,8 +865,63 @@
         <div>
           <h3>Your VS Code. Our Engine.</h3>
           <p>Write locally with your favourite extensions. Hit F6 and we compile in your server, returning the PDF in seconds.</p>
+          <div class="vscode-download">
+            <a href="/static/downloads/aureatex-sync-0.1.1.vsix" download class="btn btn-white">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download the VS Code plugin
+            </a>
+            <span class="vscode-version">v0.1.1 · .vsix</span>
+          </div>
+          <ol class="vscode-steps">
+            <li>In VS Code open <strong>Extensions</strong> → <strong>···</strong> → <strong>Install from VSIX…</strong> and pick the downloaded file.</li>
+            <li>In Settings search <strong>AureaTeX</strong> and fill in your username, then run <strong>AureaTeX: Definir Password</strong> from the Command Palette.</li>
+            <li>Open your LaTeX folder and press <strong>F6</strong>.</li>
+          </ol>
         </div>
         <div class="keycap">F6</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="ai" class="ai-section">
+    <div class="ai-container">
+      <div class="ai-text">
+        <div class="badge" style="margin-bottom: 1.2rem; color: var(--ink);">New in v1.1</div>
+        <h2>Bring your own AI.<br>It works on your project.</h2>
+        <p>AureaTeX speaks the <strong>Model Context Protocol</strong>. Connect the assistant you already use and let it read your sources, fix errors and recompile — while you watch the edits appear live in the editor.</p>
+        <ul class="ai-points">
+          <li><span class="ai-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/></svg></span><span><strong>MCP server built in.</strong> Read, search, edit and compile from Claude Code, Claude Desktop, Cursor, VS Code, opencode or Antigravity.</span></li>
+          <li><span class="ai-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></span><span><strong>Copy for AI.</strong> One click puts the file tree and your .tex files on the clipboard as Markdown — paste into any chat.</span></li>
+          <li><span class="ai-ico"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="M16 7l3 3"/><path d="M18 5l2 2"/></svg></span><span><strong>You stay in control.</strong> Read-only or edit tokens, with expiry dates, revocable at any time. Your files never leave your server unless you ask.</span></li>
+        </ul>
+        <div class="tech-pills">
+          <span class="pill">Claude Code</span>
+          <span class="pill">Cursor</span>
+          <span class="pill">VS Code</span>
+          <span class="pill">opencode</span>
+          <span class="pill">Antigravity</span>
+        </div>
+      </div>
+
+      <div class="terminal-window">
+        <div class="term-header">
+          <div class="dots" style="gap: 6px;">
+            <span style="width: 11px; height: 11px; background: #FF4747; border: none; border-radius: 50%;"></span>
+            <span style="width: 11px; height: 11px; background: #FDE047; border: none; border-radius: 50%;"></span>
+            <span style="width: 11px; height: 11px; background: #10B981; border: none; border-radius: 50%;"></span>
+          </div>
+          <span>claude — my-thesis</span>
+        </div>
+        <div class="term-body">
+          <div class="t-wrap"><span class="prompt">➜</span> claude mcp add --transport http aureatex <span class="path">https://your-server/mcp</span> --header <span class="t-dim">"Authorization: Bearer atx_…"</span></div>
+          <div class="success">✔ aureatex connected · 10 tools</div>
+          <div>&nbsp;</div>
+          <div><span class="t-you">&gt;</span> Fix the LaTeX errors in my thesis</div>
+          <div><span class="t-tool">● compile_project</span> <span class="t-dim">— 2 errors in chapters/methods.tex</span></div>
+          <div><span class="t-tool">● edit_file</span> <span class="t-dim">chapters/methods.tex:42</span></div>
+          <div><span class="t-tool">● compile_project</span> <span class="success">✔ PDF generated, 0 errors</span></div>
+          <div><span class="prompt">➜</span> <span class="blink">_</span></div>
+        </div>
       </div>
     </div>
   </section>
@@ -763,7 +929,7 @@
   <section id="deploy" class="deploy-section">
     <div class="deploy-container">
       <div class="deploy-text">
-        <div class="badge" style="margin-bottom: 1.2rem;">🚀 Deploy in 30s</div>
+        <div class="badge" style="margin-bottom: 1.2rem;">Deploy in 30s</div>
         <h2>Launch on your own server.<br>Forget the cloud.</h2>
         <p>No complex configuration, no installing TeX Live locally. Copy our compose file, hit enter, and start writing with absolute privacy.</p>
         <div class="tech-pills">
@@ -771,6 +937,7 @@
           <span class="pill">TeX Live Full</span>
           <span class="pill">MariaDB</span>
           <span class="pill">FastAPI</span>
+          <span class="pill">Sandboxed LaTeX</span>
         </div>
       </div>
       
@@ -811,7 +978,9 @@
       <div class="footer-links-col">
         <h4>Product</h4>
         <a href="#features">Features</a>
+        <a href="#ai">AI connection (MCP)</a>
         <a href="#vscode">VS Code Plugin</a>
+        <a href="/static/downloads/aureatex-sync-0.1.1.vsix" download>Download Plugin (.vsix)</a>
         <a href="#deploy">Self-Host</a>
       </div>
 
@@ -824,7 +993,7 @@
 
     <div class="footer-bottom">
       <p>&copy; 2026 AureaTeX Project. Licensed under the MIT License.</p>
-      <span class="version-badge">v1.0.0-stable</span>
+      <span class="version-badge">v1.1.0</span>
     </div>
   </footer>
 

@@ -27,6 +27,8 @@ from core.config import APP_URL
 from core.database import get_db
 from core.security import get_current_user
 
+from routers.collab import kick_user
+
 router = APIRouter(tags=["invites"])
 
 
@@ -209,6 +211,9 @@ async def accept_invite(
 
 @router.get("/api/invites/{token}")
 async def preview_invite(token: str, cur=Depends(get_db)):
+    if len(token) > 64:
+        raise HTTPException(status_code=404, detail="Link de convite inválido ou expirado.")
+
     await cur.execute(
         """
         SELECT p.name AS project_name, p.id AS project_id,
@@ -264,6 +269,7 @@ async def leave_shared(
         "DELETE FROM project_collaborators WHERE project_id = %s AND user_id = %s",
         (project_id, user["id"]),
     )
+    await kick_user(project_id, user["id"])
 
 
 # ---------------------------------------------------------------------------
@@ -306,3 +312,7 @@ async def remove_collaborator(
         "DELETE FROM project_collaborators WHERE project_id = %s AND user_id = %s",
         (project_id, collab_user_id),
     )
+    await cur.connection.commit()
+
+    # Quem perdeu o acesso deixa de poder continuar a editar na sessão aberta.
+    await kick_user(project_id, collab_user_id)

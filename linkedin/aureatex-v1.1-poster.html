@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AureaTeX v1.1</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F8FAFC; --ink: #0F172A; --red: #E03030; --yellow: #FDE047;
+    --blue: #3B82F6; --green: #10B981; --white: #FFFFFF; --muted: #475569;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1080px; height: 1350px; }
+  body {
+    /* 1080x1350: formato vertical do LinkedIn */
+    font-family: "Space Grotesk", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle, #CBD5E1 1.4px, transparent 1.6px) 0 0 / 26px 26px,
+      var(--bg);
+    padding: 64px 68px 56px;
+    display: flex; flex-direction: column;
+    position: relative; overflow: hidden;
+  }
+  body::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 14px; background: var(--red); border-bottom: 4px solid var(--ink); }
+
+  .ico { display: block; fill: none; stroke: currentColor; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* Cabeçalho */
+  .top { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+  .logo { display: flex; align-items: center; gap: 14px; font-size: 34px; font-weight: 900; letter-spacing: -0.02em; }
+  .logo svg { width: 46px; height: 46px; border: 3px solid var(--ink); border-radius: 8px; box-shadow: 4px 4px 0 var(--ink); }
+  .logo span { color: var(--red); }
+  .version {
+    font-family: "JetBrains Mono", monospace; font-size: 22px; font-weight: 700;
+    padding: 10px 20px; background: var(--yellow);
+    border: 3px solid var(--ink); border-radius: 12px; box-shadow: 5px 5px 0 var(--ink);
+  }
+
+  /* Título */
+  h1 {
+    margin-top: 44px;
+    font-size: 82px; line-height: 0.98; font-weight: 900; letter-spacing: -0.045em;
+  }
+  h1 .hl { background: linear-gradient(transparent 58%, var(--yellow) 58%, var(--yellow) 92%, transparent 92%); padding: 0 6px; }
+  h1 .red { color: var(--red); }
+  .sub { margin-top: 22px; font-size: 25px; line-height: 1.4; color: var(--muted); font-weight: 500; max-width: 900px; }
+  .sub strong { color: var(--ink); }
+
+  /* Grelha de novidades */
+  .grid { margin-top: 42px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .card {
+    background: var(--white); border: 3.5px solid var(--ink); border-radius: 18px;
+    box-shadow: 7px 7px 0 var(--ink);
+    padding: 25px 24px 24px;
+    display: flex; gap: 18px; align-items: flex-start;
+  }
+  .card .ib {
+    flex-shrink: 0; width: 54px; height: 54px; border-radius: 12px;
+    border: 3px solid var(--ink); box-shadow: 3px 3px 0 var(--ink);
+    display: flex; align-items: center; justify-content: center; background: var(--bg);
+  }
+  .card .ib .ico { width: 27px; height: 27px; }
+  .card h3 { font-size: 25px; font-weight: 900; letter-spacing: -0.02em; line-height: 1.15; margin-bottom: 6px; }
+  .card p { font-size: 18.5px; line-height: 1.36; color: var(--muted); }
+  .card.ai { grid-column: span 2; background: var(--ink); color: var(--white); box-shadow: 7px 7px 0 var(--red); }
+  .card.ai h3 { font-size: 31px; }
+  .card.ai p { color: #CBD5E1; }
+  .card.ai .ib { background: var(--yellow); color: var(--ink); border-color: var(--white); box-shadow: 3px 3px 0 var(--red); }
+  .clients { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+  .clients span {
+    font-family: "JetBrains Mono", monospace; font-size: 16px; font-weight: 700;
+    padding: 5px 12px; border: 2px solid var(--white); border-radius: 8px; color: var(--white);
+  }
+  .card.sec .ib { background: var(--green); color: var(--white); }
+  .card.img .ib { background: var(--blue); color: var(--white); }
+  .card.exp .ib { background: var(--yellow); }
+  .card.cmp .ib { background: var(--red); color: var(--white); }
+  .card.ac .ib { background: var(--white); }
+  .card.cp .ib { background: var(--white); }
+
+  /* Rodapé */
+  .foot { margin-top: auto; padding-top: 26px; display: flex; align-items: flex-end; justify-content: space-between; gap: 30px; }
+  .tags { display: flex; gap: 9px; flex-wrap: nowrap; }
+  .tags span {
+    font-family: "JetBrains Mono", monospace; font-size: 17px; font-weight: 700;
+    padding: 6px 13px; background: var(--white); border: 2.5px solid var(--ink); border-radius: 9px; box-shadow: 3px 3px 0 var(--ink);
+  }
+  .links { text-align: right; font-family: "JetBrains Mono", monospace; font-size: 19px; font-weight: 700; line-height: 1.7; }
+  .links .url { display: inline-block; background: var(--red); color: var(--white); padding: 4px 12px; border: 3px solid var(--ink); border-radius: 9px; box-shadow: 4px 4px 0 var(--ink); }
+</style>
+</head>
+<body>
+
+  <div class="top">
+    <div class="logo">
+      <svg viewBox="0 0 28 28"><rect width="28" height="28" fill="#E03030"/><path d="M7 21L14 7L21 21H17L14 14.5L11 21H7Z" fill="white"/></svg>
+      <b style="font-weight:900">Aurea<span>TeX</span></b>
+    </div>
+    <div class="version">v1.1 update</div>
+  </div>
+
+  <h1>Your LaTeX editor<br>now works with <span class="hl">your&nbsp;AI</span><span class="red">.</span></h1>
+  <p class="sub"><strong>AureaTeX</strong> is my self-hosted, open-source alternative to Overleaf: live collaboration, native Git and TeX Live, all on your own server.</p>
+
+  <div class="grid">
+    <div class="card ai">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v4a6 6 0 0 1-12 0z"/><path d="M12 18v4"/></svg></div>
+      <div>
+        <h3>Built-in MCP server</h3>
+        <p>Connect your AI assistant: it reads the project, edits files and recompiles until the errors are gone — and you watch the edits appear live.</p>
+        <div class="clients"><span>Claude Code</span><span>Cursor</span><span>VS Code</span><span>opencode</span><span>Antigravity</span></div>
+      </div>
+    </div>
+
+    <div class="card cp">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div>
+      <div><h3>Copy for AI</h3><p>File tree + sources as Markdown, one click, ready to paste into any chat.</p></div>
+    </div>
+
+    <div class="card ac">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+      <div><h3>Smarter editor</h3><p>Autocomplete for packages, environments, <code style="font-family:'JetBrains Mono';font-size:17px">\cite</code> and <code style="font-family:'JetBrains Mono';font-size:17px">\ref</code>.</p></div>
+    </div>
+
+    <div class="card cmp">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg></div>
+      <div><h3>Compile any version</h3><p>Open a second draft and compile it — the main file stays put.</p></div>
+    </div>
+
+    <div class="card img">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></div>
+      <div><h3>Image editing</h3><p>Zoom, crop and rotate figures without leaving the editor.</p></div>
+    </div>
+
+    <div class="card exp">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></div>
+      <div><h3>One-click export</h3><p>Download the PDF or the whole project as ZIP from the project list.</p></div>
+    </div>
+
+    <div class="card sec">
+      <div class="ib"><svg class="ico" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg></div>
+      <div><h3>Security hardening</h3><p>Sandboxed bibliography, session revocation, CSP and scoped AI tokens.</p></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="tags"><span>FastAPI</span><span>TeX Live</span><span>Docker</span><span>Open source</span></div>
+    <div class="links">
+      github.com/joshua137k/AureaTex<br>
+      <span class="url">aurea.joshuadourado.pt</span>
+    </div>
+  </div>
+
+</body>
+</html>

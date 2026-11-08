@@ -1,35 +1,40 @@
-import os
+import asyncio
 import base64
-import mimetypes
+import os
 import re
 import shutil
 import subprocess
-import urllib.parse
-import asyncio
 from collections import defaultdict
 from datetime import datetime
 from typing import Optional
 
 import httpx
+import pymysql
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from core.config import BASE_PROJETOS_DIR, GITEA_URL
+from core.config import GITEA_URL
 from core.database import get_db
+from core.paths import project_dir
 from core.security import get_current_user
+from core.storage import (
+    IGNORED_EXTS,
+    forget_project,
+    read_project_tree,
+    sync_project_to_disk,
+    write_file,
+)
+from core.templates import TEMPLATES
 
 from routers.collab import (
-    _rooms,
-    _save_tasks,
-    freeze_room_for_pull,
-    finish_pull_reload,
     abort_pull_reload,
+    close_room,
+    finish_pull_reload,
+    flush_project,
+    freeze_room_for_pull,
 )
-
-from routers.compile import (
-    _project_locks,
-    _escrever_ficheiros_para_compilacao,
-)
+from routers.compile import _project_locks
+from routers.files import PROVIDERS, validate_project_name
 
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
@@ -37,194 +42,205 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 
 _git_locks = defaultdict(asyncio.Lock)
 
-
-IGNORED_EXTS = (
-    ".aux",
-    ".log",
-    ".out",
-    ".toc",
-    ".synctex.gz",
-    ".synctex(busy)",
-    ".fls",
-    ".fdb_latexmk",
-    ".bcf",
-    ".lof",
-    ".lot",
-    ".mw",
-    ".run.xml",
-    ".bbl",
-    ".blg",
-    ".nav",
-    ".snm",
-    ".vrb",
-)
+GIT_TIMEOUT_SECS = 180
+_REPO_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]+(/[A-Za-z0-9_.-]+)?$")
 
 
 class ProjectCreate(BaseModel):
-    name: str
-    description: str = ""
+    name: str = Field(max_length=255)
+    description: str = Field(default="", max_length=5000)
     template: str = "blank"
     is_public: bool = False
     remote_provider: str = "gitea"
 
 
 class ProjectUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=255)
+    description: Optional[str] = Field(default=None, max_length=5000)
     is_public: Optional[bool] = None
 
 
 class GithubImport(BaseModel):
-    repo_name: str
+    repo_name: str = Field(max_length=200)
 
 
-TEMPLATES = {
-    "blank": r"""\documentclass[12pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[portuguese]{babel}
-\usepackage{amsmath}
+# ---------------------------------------------------------------------------
+# Git
+# ---------------------------------------------------------------------------
+def _git_env(auth: Optional[str] = None) -> dict:
+    """
+    Ambiente para o git. A configuração vai por variáveis de ambiente para:
+      - o token nunca ficar gravado em .git/config nem aparecer nos argumentos;
+      - neutralizar hooks, fsmonitor e symlinks vindos de repositórios alheios.
+    """
+    config = [
+        ("safe.directory", "*"),
+        ("core.hooksPath", "/dev/null"),
+        ("core.fsmonitor", "false"),
+        ("core.symlinks", "false"),
+        ("credential.helper", ""),
+        ("protocol.file.allow", "never"),
+        ("protocol.ext.allow", "never"),
+        ("user.name", "AureaTeX System"),
+        ("user.email", "system@aureatex.local"),
+        ("init.defaultBranch", "main"),
+    ]
 
-\title{Novo Documento}
-\author{Autor}
-\date{\today}
+    if auth:
+        token = base64.b64encode(auth.encode()).decode()
+        config.append(("http.extraHeader", f"Authorization: Basic {token}"))
 
-\begin{document}
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["GIT_ASKPASS"] = "/bin/true"
+    env["GIT_CONFIG_NOSYSTEM"] = "1"
+    env["GIT_CONFIG_COUNT"] = str(len(config))
 
-\maketitle
+    for i, (key, value) in enumerate(config):
+        env[f"GIT_CONFIG_KEY_{i}"] = key
+        env[f"GIT_CONFIG_VALUE_{i}"] = value
 
-\section{Introdução}
-Escreve aqui o teu texto.
-
-\end{document}""",
-
-    "article": r"""\documentclass[12pt,a4paper]{article}
-\usepackage[utf8]{inputenc}
-\usepackage[portuguese]{babel}
-\usepackage{amsmath,amssymb}
-\usepackage{graphicx}
-\usepackage{hyperref}
-\usepackage{geometry}
-\geometry{margin=2.5cm}
-
-\title{Título do Artigo}
-\author{Primeiro Autor \and Segundo Autor}
-\date{\today}
-
-\begin{document}
-
-\maketitle
-
-\begin{abstract}
-Resumo do artigo.
-\end{abstract}
-
-\section{Introdução}
-
-\section{Metodologia}
-
-\section{Resultados}
-
-\section{Conclusão}
-
-\bibliographystyle{plain}
-\bibliography{refs}
-
-\end{document}""",
-
-    "thesis": r"""\documentclass[12pt,a4paper]{report}
-\usepackage[utf8]{inputenc}
-\usepackage[portuguese]{babel}
-\usepackage{amsmath,amssymb}
-\usepackage{graphicx}
-\usepackage{hyperref}
-\usepackage{geometry}
-\geometry{margin=3cm}
-
-\title{Título da Tese}
-\author{Nome do Autor}
-\date{2025}
-
-\begin{document}
-
-\maketitle
-\tableofcontents
-
-\chapter{Introdução}
-
-\chapter{Estado da Arte}
-
-\chapter{Metodologia}
-
-\chapter{Resultados e Discussão}
-
-\chapter{Conclusão}
-
-\bibliographystyle{plain}
-\bibliography{refs}
-
-\end{document}""",
-
-    "beamer": r"""\documentclass{beamer}
-\usepackage[utf8]{inputenc}
-\usepackage[portuguese]{babel}
-
-\title{Título da Apresentação}
-\author{Autor}
-\date{\today}
-
-\begin{document}
-
-\begin{frame}
-\titlepage
-\end{frame}
-
-\begin{frame}{Introdução}
-\begin{itemize}
-\item Ponto 1
-\item Ponto 2
-\end{itemize}
-\end{frame}
-
-\end{document}""",
-}
+    return env
 
 
-def _ler_ficheiros_do_disco(project_path: str):
-    results = []
-
-    for root_dir, _, filenames in os.walk(project_path):
-        for filename in filenames:
-            if any(part.startswith(".") for part in root_dir.split(os.sep)):
-                continue
-
-            if filename.endswith(IGNORED_EXTS):
-                continue
-
-            filepath = os.path.join(root_dir, filename)
-            rel_path = os.path.relpath(filepath, project_path).replace("\\", "/")
-
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-
-            except UnicodeDecodeError:
-                with open(filepath, "rb") as f:
-                    encoded = base64.b64encode(f.read()).decode("utf-8")
-
-                mime_type, _ = mimetypes.guess_type(filepath)
-                mime_type = mime_type or "application/octet-stream"
-                file_content = f"data:{mime_type};base64,{encoded}"
-
-            results.append((rel_path, file_content))
-
-    return results
+def _scrub(text: str) -> str:
+    """Remove credenciais de mensagens de erro do git."""
+    text = re.sub(r"(https?://)[^/@\s]+@", r"\1***@", text or "")
+    text = re.sub(r"(Authorization:\s*\w+\s+)\S+", r"\1***", text)
+    return text.strip()[:2000]
 
 
-async def _run_git(args, cwd, **kwargs):
+async def _run_git(args, cwd, auth: Optional[str] = None, check: bool = False):
     """
     Executa comandos git numa thread separada para não bloquear o event loop.
     """
-    return await asyncio.to_thread(subprocess.run, args, cwd=cwd, **kwargs)
+    def run():
+        return subprocess.run(
+            args,
+            cwd=cwd,
+            env=_git_env(auth),
+            capture_output=True,
+            text=True,
+            errors="replace",
+            timeout=GIT_TIMEOUT_SECS,
+            stdin=subprocess.DEVNULL,
+        )
+
+    try:
+        proc = await asyncio.to_thread(run)
+    except subprocess.TimeoutExpired:
+        raise Exception("O git demorou demasiado tempo a responder.")
+
+    if check and proc.returncode != 0:
+        raise _git_error(proc)
+
+    return proc
+
+
+def _git_error(proc) -> Exception:
+    stderr = proc.stderr or proc.stdout or ""
+
+    if "Authentication failed" in stderr or "403" in stderr or "401" in stderr:
+        return Exception(
+            "Sessão expirou ou não tens permissão no remoto. Volta a ligar a conta nas definições."
+        )
+
+    return Exception(_scrub(stderr) or "Erro na operação Git.")
+
+
+def _remote_for(project: dict, db_user: dict) -> tuple[str, str, str]:
+    """Devolve (provider, remote_url, auth) — sem credenciais no URL."""
+    provider = project.get("remote_provider") or "gitea"
+    repo_name = project.get("remote_repo") or project.get("gitea_repo") or ""
+
+    if not _REPO_NAME_RE.match(repo_name) or ".." in repo_name:
+        raise HTTPException(status_code=400, detail="Nome de repositório remoto inválido.")
+
+    if provider == "github":
+        if not db_user.get("github_token"):
+            raise HTTPException(status_code=401, detail="Conta GitHub não vinculada.")
+
+        owner_repo = repo_name if "/" in repo_name else f"{db_user.get('github_username')}/{repo_name}"
+        base_url = "https://github.com"
+        auth = f"x-access-token:{db_user['github_token']}"
+
+    else:
+        if not db_user.get("gitea_token"):
+            raise HTTPException(status_code=401, detail="Conta Gitea não vinculada.")
+
+        owner_repo = repo_name if "/" in repo_name else f"{db_user['username']}/{repo_name}"
+        base_url = GITEA_URL
+        auth = f"oauth2:{db_user['gitea_token']}"
+
+    if not _REPO_NAME_RE.match(owner_repo) or ".." in owner_repo:
+        raise HTTPException(status_code=400, detail="Nome de repositório remoto inválido.")
+
+    return provider, f"{base_url}/{owner_repo}.git", auth
+
+
+async def _prepare_repo(project_path: str, remote_url: str) -> None:
+    """git init (se preciso), .gitignore e remote sem credenciais."""
+    lock_file = os.path.join(project_path, ".git", "index.lock")
+
+    if os.path.exists(lock_file):
+        try:
+            os.remove(lock_file)
+        except OSError:
+            pass
+
+    gitignore_path = os.path.join(project_path, ".gitignore")
+
+    if not os.path.exists(gitignore_path):
+        with open(gitignore_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(["*" + ext for ext in IGNORED_EXTS]) + "\n")
+
+    if not os.path.isdir(os.path.join(project_path, ".git")):
+        await _run_git(["git", "init"], cwd=project_path, check=True)
+        await _run_git(["git", "branch", "-M", "main"], cwd=project_path)
+        await _run_git(["git", "remote", "add", "origin", remote_url], cwd=project_path, check=True)
+    else:
+        # set-url também limpa tokens que versões antigas gravavam no URL.
+        proc = await _run_git(["git", "remote", "set-url", "origin", remote_url], cwd=project_path)
+
+        if proc.returncode != 0:
+            await _run_git(["git", "remote", "add", "origin", remote_url], cwd=project_path, check=True)
+
+
+async def _commit_all(project_path: str, message: str) -> None:
+    await _run_git(["git", "add", "-A", "."], cwd=project_path, check=True)
+    # Sai com código != 0 quando não há nada para commitar — é normal.
+    await _run_git(["git", "commit", "-m", message], cwd=project_path)
+
+
+async def _project_for_git(project_id: int, user: dict, cur) -> dict:
+    await cur.execute(
+        """
+        SELECT p.id, p.name, p.remote_provider, p.remote_repo, p.gitea_repo
+        FROM projects p
+        WHERE p.id = %s
+          AND (
+                p.owner_id = %s
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_collaborators pc
+                    WHERE pc.project_id = p.id
+                      AND pc.user_id = %s
+                      AND pc.role = 'editor'
+                )
+          )
+        """,
+        (project_id, user["id"], user["id"]),
+    )
+
+    project = await cur.fetchone()
+
+    if not project:
+        raise HTTPException(
+            status_code=404,
+            detail="Projeto não encontrado ou não tens permissão.",
+        )
+
+    return project
 
 
 # ---------------------------------------------------------------------------
@@ -256,35 +272,39 @@ async def create_project(
     user=Depends(get_current_user),
     cur=Depends(get_db),
 ):
-    await cur.execute(
-        """
-        INSERT INTO projects (
-            owner_id,
-            name,
-            description,
-            template,
-            is_public,
-            remote_provider
+    name = validate_project_name(body.name)
+    template = body.template if body.template in TEMPLATES else "blank"
+    provider = body.remote_provider if body.remote_provider in PROVIDERS else "gitea"
+
+    try:
+        await cur.execute(
+            """
+            INSERT INTO projects (
+                owner_id,
+                name,
+                description,
+                template,
+                is_public,
+                remote_provider
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (
+                user["id"],
+                name,
+                body.description,
+                template,
+                int(body.is_public),
+                provider,
+            ),
         )
-        VALUES (%s, %s, %s, %s, %s, %s)
-        """,
-        (
-            user["id"],
-            body.name,
-            body.description,
-            body.template,
-            int(body.is_public),
-            body.remote_provider,
-        ),
-    )
+    except pymysql.err.IntegrityError:
+        raise HTTPException(status_code=409, detail="Já tens um projeto com esse nome.")
 
     await cur.execute("SELECT LAST_INSERT_ID() as id")
     project_id = (await cur.fetchone())["id"]
 
-    project_path = os.path.join(BASE_PROJETOS_DIR, str(project_id))
-    os.makedirs(project_path, exist_ok=True)
-
-    content = TEMPLATES.get(body.template, TEMPLATES["blank"])
+    content = TEMPLATES[template]
 
     await cur.execute(
         """
@@ -294,8 +314,9 @@ async def create_project(
         (project_id, content),
     )
 
-    with open(os.path.join(project_path, "main.tex"), "w", encoding="utf-8") as f:
-        f.write(content)
+    # Pasta limpa: um id reutilizado não pode herdar ficheiros antigos.
+    await asyncio.to_thread(shutil.rmtree, project_dir(project_id), True)
+    await asyncio.to_thread(write_file, project_id, "main.tex", content)
 
     await cur.execute(
         "SELECT * FROM projects WHERE id = %s",
@@ -313,19 +334,15 @@ async def get_project(
 ):
     await cur.execute(
         """
-        SELECT *
-        FROM projects
-        WHERE id = %s
-          AND (
-                owner_id = %s
-                OR EXISTS (
-                    SELECT 1
-                    FROM project_collaborators pc
-                    WHERE pc.project_id = %s AND pc.user_id = %s
-                )
-          )
+        SELECT p.*,
+               CASE WHEN p.owner_id = %s THEN 'owner' ELSE pc.role END AS role
+        FROM projects p
+        LEFT JOIN project_collaborators pc
+            ON pc.project_id = p.id AND pc.user_id = %s
+        WHERE p.id = %s
+          AND (p.owner_id = %s OR pc.id IS NOT NULL)
         """,
-        (project_id, user["id"], project_id, user["id"]),
+        (user["id"], user["id"], project_id, user["id"]),
     )
 
     project = await cur.fetchone()
@@ -356,7 +373,7 @@ async def update_project(
 
     if body.name is not None:
         updates.append("name = %s")
-        values.append(body.name)
+        values.append(validate_project_name(body.name))
 
     if body.description is not None:
         updates.append("description = %s")
@@ -369,10 +386,13 @@ async def update_project(
     if updates:
         values.append(project_id)
 
-        await cur.execute(
-            f"UPDATE projects SET {', '.join(updates)} WHERE id = %s",
-            values,
-        )
+        try:
+            await cur.execute(
+                f"UPDATE projects SET {', '.join(updates)} WHERE id = %s",
+                values,
+            )
+        except pymysql.err.IntegrityError:
+            raise HTTPException(status_code=409, detail="Já tens um projeto com esse nome.")
 
     await cur.execute(
         "SELECT * FROM projects WHERE id = %s",
@@ -396,27 +416,19 @@ async def delete_project(
     if not await cur.fetchone():
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
 
+    # Fecha a sala primeiro para nenhum autosave correr a meio.
+    await close_room(project_id, reason="Project deleted")
+
     await cur.execute(
         "DELETE FROM projects WHERE id = %s",
         (project_id,),
     )
 
-    project_path = os.path.join(BASE_PROJETOS_DIR, str(project_id))
+    await asyncio.to_thread(shutil.rmtree, project_dir(project_id), True)
 
-    if os.path.exists(project_path):
-        shutil.rmtree(project_path)
-
+    forget_project(project_id)
     _git_locks.pop(project_id, None)
     _project_locks.pop(project_id, None)
-
-    if project_id in _rooms:
-        _rooms.pop(project_id, None)
-
-    chaves_a_remover = [k for k in list(_save_tasks.keys()) if k[0] == project_id]
-
-    for k in chaves_a_remover:
-        _save_tasks[k].cancel()
-        _save_tasks.pop(k, None)
 
 
 # ---------------------------------------------------------------------------
@@ -428,97 +440,29 @@ async def pull_from_remote(
     user=Depends(get_current_user),
     cur=Depends(get_db),
 ):
-    await cur.execute(
-        "SELECT * FROM users WHERE id = %s",
-        (user["id"],),
-    )
-    db_user = await cur.fetchone()
+    project = await _project_for_git(project_id, user, cur)
 
-    await cur.execute(
-        """
-        SELECT p.name, p.remote_provider, p.remote_repo, p.gitea_repo
-        FROM projects p
-        WHERE p.id = %s
-          AND (
-                p.owner_id = %s
-                OR EXISTS (
-                    SELECT 1
-                    FROM project_collaborators pc
-                    WHERE pc.project_id = p.id
-                      AND pc.user_id = %s
-                      AND pc.role = 'editor'
-                )
-          )
-        """,
-        (project_id, user["id"], user["id"]),
-    )
-
-    project = await cur.fetchone()
-
-    if not project:
-        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
-
-    provider = project.get("remote_provider") or "gitea"
-    repo_name = project.get("remote_repo") or project.get("gitea_repo")
-
-    if not repo_name:
+    if not (project.get("remote_repo") or project.get("gitea_repo")):
         raise HTTPException(
             status_code=400,
             detail="Faz Push primeiro para criar o repositório.",
         )
 
-    # ------------------------------------------------------------------
-    # Determinar URL remoto
-    # ------------------------------------------------------------------
-    if provider == "github":
-        if not db_user.get("github_token"):
-            raise HTTPException(status_code=401, detail="Conta GitHub não vinculada.")
-
-        gh_token = urllib.parse.quote(db_user["github_token"])
-
-        if "/" in repo_name:
-            remote_url = f"https://x-access-token:{gh_token}@github.com/{repo_name}.git"
-        else:
-            gh_user = db_user.get("github_username")
-            remote_url = f"https://x-access-token:{gh_token}@github.com/{gh_user}/{repo_name}.git"
-
-    else:
-        if not db_user.get("gitea_token"):
-            raise HTTPException(status_code=401, detail="Conta Gitea não vinculada.")
-
-        domain = GITEA_URL.replace("https://", "").replace("http://", "")
-        username_encoded = urllib.parse.quote(db_user["username"])
-        token_encoded = urllib.parse.quote(db_user["gitea_token"])
-
-        if "/" in repo_name:
-            remote_url = f"https://oauth2:{token_encoded}@{domain}/{repo_name}.git"
-        else:
-            remote_url = f"https://oauth2:{token_encoded}@{domain}/{username_encoded}/{repo_name}.git"
+    provider, remote_url, auth = _remote_for(project, user)
 
     # O pull usa também o lock do compile para impedir compilações concorrentes.
     async with _git_locks[project_id], _project_locks[project_id]:
+        # Guarda o que estiver pendente ANTES de congelar: fica no commit de
+        # segurança local, recuperável com git se o pull apagar algo.
+        await flush_project(project_id)
         await freeze_room_for_pull(project_id)
 
         try:
-            project_path = os.path.join(BASE_PROJETOS_DIR, str(project_id))
+            project_path = project_dir(project_id)
             os.makedirs(project_path, exist_ok=True)
 
-            lock_file = os.path.join(project_path, ".git", "index.lock")
-
-            if os.path.exists(lock_file):
-                try:
-                    os.remove(lock_file)
-                except OSError:
-                    pass
-
-            await _run_git(
-                ["git", "config", "--global", "--add", "safe.directory", project_path],
-                cwd=project_path,
-            )
-
             # ----------------------------------------------------------
-            # Preparar disco com o conteúdo atual da DB.
-            # Não guardamos aqui o estado do collab: o remoto é que manda.
+            # Preparar disco com o conteúdo atual da BD.
             # ----------------------------------------------------------
             for ext in IGNORED_EXTS:
                 await cur.execute(
@@ -530,45 +474,13 @@ async def pull_from_remote(
                     (project_id, f"%{ext}"),
                 )
 
-            await cur.execute(
-                """
-                SELECT filename, content
-                FROM project_files
-                WHERE project_id = %s
-                """,
-                (project_id,),
-            )
-            files = await cur.fetchall()
+            forget_project(project_id)
+            await sync_project_to_disk(project_id, cur)
 
-            await asyncio.to_thread(
-                _escrever_ficheiros_para_compilacao,
-                project_path,
-                files,
-            )
-
-            gitignore_path = os.path.join(project_path, ".gitignore")
-
-            if not os.path.exists(gitignore_path):
-                with open(gitignore_path, "w", encoding="utf-8") as f:
-                    f.write("\n".join(["*" + ext for ext in IGNORED_EXTS]) + "\n")
-
-            if not os.path.exists(os.path.join(project_path, ".git")):
-                await _run_git(["git", "init"], cwd=project_path)
-                await _run_git(["git", "branch", "-M", "main"], cwd=project_path)
-                await _run_git(["git", "remote", "add", "origin", remote_url], cwd=project_path)
-            else:
-                await _run_git(["git", "remote", "set-url", "origin", remote_url], cwd=project_path)
-
-            await _run_git(["git", "config", "user.name", "AureaTeX System"], cwd=project_path)
-            await _run_git(["git", "config", "user.email", "system@aureatex.local"], cwd=project_path)
-
-            await _run_git(["git", "add", "."], cwd=project_path)
+            await _prepare_repo(project_path, remote_url)
 
             time_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            await _run_git(
-                ["git", "commit", "-m", f"Auto-save antes do pull: {time_str}"],
-                cwd=project_path,
-            )
+            await _commit_all(project_path, f"Auto-save antes do pull: {time_str}")
 
             # ----------------------------------------------------------
             # Puxar remoto por cima
@@ -576,58 +488,24 @@ async def pull_from_remote(
             fetch_proc = await _run_git(
                 ["git", "fetch", "origin", "main"],
                 cwd=project_path,
-                capture_output=True,
-                text=True,
+                auth=auth,
             )
 
             if fetch_proc.returncode != 0:
-                stderr = fetch_proc.stderr or ""
+                raise _git_error(fetch_proc)
 
-                if "Authentication failed" in stderr or "403" in stderr:
-                    raise Exception("Sessão expirou ou não tens permissão no remoto.")
-
-                raise Exception(stderr or "Erro no git fetch.")
-
-            reset_proc = await _run_git(
+            await _run_git(
                 ["git", "reset", "--hard", "origin/main"],
                 cwd=project_path,
-                capture_output=True,
-                text=True,
+                check=True,
             )
 
             await _run_git(["git", "clean", "-fd"], cwd=project_path)
 
-            if reset_proc.returncode != 0:
-                stderr = reset_proc.stderr or ""
-
-                if "Authentication failed" in stderr or "403" in stderr:
-                    raise Exception("Sessão expirou ou não tens permissão no remoto.")
-
-                raise Exception(stderr or "Erro no git reset.")
-
             # ----------------------------------------------------------
-            # Limpar ficheiros temporários estranhos
+            # Atualizar BD com o conteúdo que veio do remoto
             # ----------------------------------------------------------
-            await cur.execute(
-                """
-                DELETE FROM project_files
-                WHERE project_id = %s
-                  AND filename LIKE '.fuse_hidden%%'
-                """,
-                (project_id,),
-            )
-
-            # Segurança extra: cancela autosaves antigos que ainda existam.
-            for k in list(_save_tasks.keys()):
-                if k[0] == project_id:
-                    _save_tasks[k].cancel()
-                    _save_tasks.pop(k, None)
-
-            # ----------------------------------------------------------
-            # Atualizar DB com o conteúdo que veio do remoto
-            # ----------------------------------------------------------
-            files_updated = 0
-            files_from_disk = await asyncio.to_thread(_ler_ficheiros_do_disco, project_path)
+            files_from_disk = await asyncio.to_thread(read_project_tree, project_path)
 
             for rel_path, file_content in files_from_disk:
                 await cur.execute(
@@ -641,42 +519,36 @@ async def pull_from_remote(
                     (project_id, rel_path, file_content),
                 )
 
-                files_updated += 1
-
             # ----------------------------------------------------------
-            # Apagar da DB ficheiros que não existem no disco
+            # Apagar da BD ficheiros que não existem no disco
             # ----------------------------------------------------------
-            valid_files = []
+            valid_files = [rel_path for rel_path, _ in files_from_disk]
 
-            for dp, dn, fnames in os.walk(project_path):
-                if any(p.startswith(".") for p in dp.split(os.sep)):
-                    continue
+            await cur.execute(
+                "SELECT filename, is_main FROM project_files WHERE project_id = %s",
+                (project_id,),
+            )
+            existing = await cur.fetchall()
 
-                for f in fnames:
-                    if not f.endswith(IGNORED_EXTS):
-                        valid_files.append(
-                            os.path.relpath(
-                                os.path.join(dp, f),
-                                project_path,
-                            ).replace("\\", "/")
-                        )
+            keep = set(valid_files)
+            to_delete = [r["filename"] for r in existing if r["filename"] not in keep]
 
-            if valid_files:
-                format_strings = ",".join(["%s"] * len(valid_files))
+            for i in range(0, len(to_delete), 500):
+                chunk = to_delete[i:i + 500]
+                marks = ",".join(["%s"] * len(chunk))
 
                 await cur.execute(
                     f"""
                     DELETE FROM project_files
                     WHERE project_id = %s
-                      AND filename NOT IN ({format_strings})
+                      AND filename IN ({marks})
                     """,
-                    (project_id, *valid_files),
+                    (project_id, *chunk),
                 )
-            else:
-                await cur.execute(
-                    "DELETE FROM project_files WHERE project_id = %s",
-                    (project_id,),
-                )
+
+            # Se o ficheiro principal desapareceu no remoto, escolhe outro.
+            if not any(r["is_main"] and r["filename"] in keep for r in existing):
+                await _pick_main_file(project_id, cur)
 
             await cur.execute(
                 "UPDATE projects SET updated_at = NOW() WHERE id = %s",
@@ -684,6 +556,7 @@ async def pull_from_remote(
             )
 
             await cur.connection.commit()
+            forget_project(project_id)
 
             # ------------------------------------------------------------
             # Finaliza o collab e força reload dos clientes.
@@ -692,7 +565,7 @@ async def pull_from_remote(
 
             return {
                 "status": "success",
-                "message": f"Pull concluído! {files_updated} ficheiros sincronizados.",
+                "message": f"Pull concluído! {len(files_from_disk)} ficheiros sincronizados.",
             }
 
         except HTTPException:
@@ -700,8 +573,42 @@ async def pull_from_remote(
             raise
 
         except Exception as e:
+            await cur.connection.rollback()
             await abort_pull_reload(project_id)
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=_scrub(str(e)))
+
+
+async def _pick_main_file(project_id: int, cur) -> None:
+    """Define um ficheiro principal quando o projeto não tem nenhum."""
+    await cur.execute(
+        """
+        SELECT filename, (content LIKE %s) AS has_class
+        FROM project_files
+        WHERE project_id = %s AND filename LIKE %s
+        """,
+        ("%\\\\documentclass%", project_id, "%.tex"),
+    )
+    candidates = await cur.fetchall()
+
+    if not candidates:
+        return
+
+    def rank(row):
+        name = row["filename"]
+        base = name.split("/")[-1].lower()
+        return (
+            0 if base in ("main.tex", "thesis.tex", "tese.tex") else 1,
+            0 if row["has_class"] else 1,
+            name.count("/"),
+            name.lower(),
+        )
+
+    best = min(candidates, key=rank)["filename"]
+
+    await cur.execute(
+        "UPDATE project_files SET is_main = (filename = %s) WHERE project_id = %s",
+        (best, project_id),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -713,38 +620,7 @@ async def publish_to_remote(
     user=Depends(get_current_user),
     cur=Depends(get_db),
 ):
-    await cur.execute(
-        "SELECT * FROM users WHERE id = %s",
-        (user["id"],),
-    )
-    db_user = await cur.fetchone()
-
-    await cur.execute(
-        """
-        SELECT p.id, p.name, p.remote_provider, p.remote_repo, p.gitea_repo
-        FROM projects p
-        WHERE p.id = %s
-          AND (
-                p.owner_id = %s
-                OR EXISTS (
-                    SELECT 1
-                    FROM project_collaborators pc
-                    WHERE pc.project_id = p.id
-                      AND pc.user_id = %s
-                      AND pc.role = 'editor'
-                )
-          )
-        """,
-        (project_id, user["id"], user["id"]),
-    )
-
-    project = await cur.fetchone()
-
-    if not project:
-        raise HTTPException(
-            status_code=404,
-            detail="Projeto não encontrado ou não tens permissão.",
-        )
+    project = await _project_for_git(project_id, user, cur)
 
     provider = project.get("remote_provider") or "gitea"
     repo_name = project.get("remote_repo") or project.get("gitea_repo")
@@ -754,7 +630,7 @@ async def publish_to_remote(
             r"[^a-zA-Z0-9-]",
             "",
             project["name"].replace(" ", "-"),
-        ).lower()
+        ).lower().strip("-")
 
         if not repo_name:
             repo_name = f"projeto-{project_id}"
@@ -763,20 +639,20 @@ async def publish_to_remote(
             "UPDATE projects SET remote_repo = %s, gitea_repo = %s WHERE id = %s",
             (repo_name, repo_name, project_id),
         )
+        project["remote_repo"] = repo_name
+
+    provider, remote_url, auth = _remote_for(project, user)
 
     # ------------------------------------------------------------------
     # Criar repositório remoto se ainda não existir
     # ------------------------------------------------------------------
     if "/" not in repo_name:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=20) as client:
             if provider == "github":
-                if not db_user.get("github_token"):
-                    raise HTTPException(status_code=401, detail="Conta GitHub não vinculada.")
-
                 resp = await client.post(
                     "https://api.github.com/user/repos",
                     headers={
-                        "Authorization": f"Bearer {db_user['github_token']}",
+                        "Authorization": f"Bearer {user['github_token']}",
                         "Accept": "application/vnd.github.v3+json",
                     },
                     json={
@@ -789,16 +665,13 @@ async def publish_to_remote(
                 if resp.status_code not in (201, 409, 422):
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Erro repositório GitHub: {resp.text}",
+                        detail=f"Erro repositório GitHub: {_scrub(resp.text)[:300]}",
                     )
 
             else:
-                if not db_user.get("gitea_token"):
-                    raise HTTPException(status_code=401, detail="Conta Gitea não vinculada.")
-
                 resp = await client.post(
                     f"{GITEA_URL}/api/v1/user/repos",
-                    headers={"Authorization": f"token {db_user['gitea_token']}"},
+                    headers={"Authorization": f"token {user['gitea_token']}"},
                     json={
                         "name": repo_name,
                         "private": True,
@@ -809,146 +682,52 @@ async def publish_to_remote(
                 if resp.status_code not in (201, 409):
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Erro repositório Gitea: {resp.text}",
+                        detail=f"Erro repositório Gitea: {_scrub(resp.text)[:300]}",
                     )
-
-    # ------------------------------------------------------------------
-    # URL remoto
-    # ------------------------------------------------------------------
-    if provider == "github":
-        if not db_user.get("github_token"):
-            raise HTTPException(status_code=401, detail="Conta GitHub não vinculada.")
-
-        gh_token = urllib.parse.quote(db_user["github_token"])
-
-        if "/" in repo_name:
-            remote_url = f"https://x-access-token:{gh_token}@github.com/{repo_name}.git"
-        else:
-            gh_user = db_user.get("github_username")
-            remote_url = f"https://x-access-token:{gh_token}@github.com/{gh_user}/{repo_name}.git"
-
-    else:
-        if not db_user.get("gitea_token"):
-            raise HTTPException(status_code=401, detail="Conta Gitea não vinculada.")
-
-        domain = GITEA_URL.replace("https://", "").replace("http://", "")
-        username_encoded = urllib.parse.quote(db_user["username"])
-        token_encoded = urllib.parse.quote(db_user["gitea_token"])
-
-        if "/" in repo_name:
-            remote_url = f"https://oauth2:{token_encoded}@{domain}/{repo_name}.git"
-        else:
-            remote_url = f"https://oauth2:{token_encoded}@{domain}/{username_encoded}/{repo_name}.git"
 
     # O push também usa o lock do compile para não chocar com compilações.
     async with _git_locks[project_id], _project_locks[project_id]:
-        # No push, guarda o estado atual do collab na DB antes de enviar.
-        if project_id in _rooms:
-            room = _rooms[project_id]
+        # Guarda na BD o que ainda só estiver na memória do collab.
+        await flush_project(project_id)
 
-            if not getattr(room, "reloading", False):
-                async with room._lock:
-                    for fname, doc in list(room.docs.items()):
-                        if doc.content:
-                            await cur.execute(
-                                """
-                                INSERT INTO project_files (project_id, filename, content)
-                                VALUES (%s, %s, %s)
-                                ON DUPLICATE KEY UPDATE
-                                    content = VALUES(content),
-                                    updated_at = NOW()
-                                """,
-                                (project_id, fname, doc.content),
-                            )
-
-        project_path = os.path.join(BASE_PROJETOS_DIR, str(project_id))
+        project_path = project_dir(project_id)
         os.makedirs(project_path, exist_ok=True)
 
-        lock_file = os.path.join(project_path, ".git", "index.lock")
-
-        if os.path.exists(lock_file):
-            try:
-                os.remove(lock_file)
-            except OSError:
-                pass
-
-        await _run_git(
-            ["git", "config", "--global", "--add", "safe.directory", project_path],
-            cwd=project_path,
-        )
-
         try:
-            await cur.execute(
-                """
-                SELECT filename, content
-                FROM project_files
-                WHERE project_id = %s
-                """,
-                (project_id,),
-            )
-            files = await cur.fetchall()
+            await sync_project_to_disk(project_id, cur)
+            await cur.connection.commit()
 
-            await asyncio.to_thread(
-                _escrever_ficheiros_para_compilacao,
-                project_path,
-                files,
-            )
-
-            gitignore_path = os.path.join(project_path, ".gitignore")
-
-            if not os.path.exists(gitignore_path):
-                with open(gitignore_path, "w", encoding="utf-8") as f:
-                    f.write("\n".join(["*" + ext for ext in IGNORED_EXTS]) + "\n")
-
-            if not os.path.exists(os.path.join(project_path, ".git")):
-                await _run_git(["git", "init"], cwd=project_path, check=True)
-                await _run_git(["git", "branch", "-M", "main"], cwd=project_path)
-                await _run_git(
-                    ["git", "remote", "add", "origin", remote_url],
-                    cwd=project_path,
-                    check=True,
-                )
-            else:
-                await _run_git(
-                    ["git", "remote", "set-url", "origin", remote_url],
-                    cwd=project_path,
-                    check=True,
-                )
-
-            await _run_git(["git", "config", "user.name", "AureaTeX System"], cwd=project_path)
-            await _run_git(["git", "config", "user.email", "system@aureatex.local"], cwd=project_path)
-
-            await _run_git(["git", "add", "."], cwd=project_path, check=True)
+            await _prepare_repo(project_path, remote_url)
 
             time_str = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-            await _run_git(
-                ["git", "commit", "-m", f"Auto-save AureaTeX: {time_str}"],
-                cwd=project_path,
-            )
+            await _commit_all(project_path, f"Auto-save AureaTeX: {time_str}")
 
             proc = await _run_git(
                 ["git", "push", "-u", "origin", "main"],
                 cwd=project_path,
-                capture_output=True,
-                text=True,
+                auth=auth,
             )
 
             if proc.returncode != 0:
                 stderr = proc.stderr or ""
 
-                if "Authentication failed" in stderr or "403" in stderr:
-                    raise Exception("Sessão expirou ou não tens permissão no remoto.")
+                if "rejected" in stderr or "fetch first" in stderr or "non-fast-forward" in stderr:
+                    raise Exception(
+                        "O remoto tem alterações que não estão aqui. Faz Pull primeiro."
+                    )
 
-                safe_error = re.sub(r":(.*?)\@", ":***@", stderr)
-                raise Exception(f"Falha na operação Git: {safe_error}")
+                raise _git_error(proc)
 
             return {
                 "status": "success",
                 "message": f"Guardado com sucesso no {provider.capitalize()}!",
             }
 
+        except HTTPException:
+            raise
+
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=_scrub(str(e)))
 
 
 # ---------------------------------------------------------------------------
@@ -957,22 +736,15 @@ async def publish_to_remote(
 @router.get("/github/repos")
 async def list_github_repos(
     user=Depends(get_current_user),
-    cur=Depends(get_db),
 ):
-    await cur.execute(
-        "SELECT github_token FROM users WHERE id = %s",
-        (user["id"],),
-    )
-    db_user = await cur.fetchone()
-
-    if not db_user or not db_user.get("github_token"):
+    if not user.get("github_token"):
         raise HTTPException(status_code=401, detail="Conta GitHub não vinculada.")
 
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         resp = await client.get(
             "https://api.github.com/user/repos?per_page=100&sort=updated",
             headers={
-                "Authorization": f"Bearer {db_user['github_token']}",
+                "Authorization": f"Bearer {user['github_token']}",
                 "Accept": "application/vnd.github.v3+json",
             },
         )
@@ -1001,67 +773,53 @@ async def import_github_repo(
     user=Depends(get_current_user),
     cur=Depends(get_db),
 ):
-    await cur.execute(
-        "SELECT github_token FROM users WHERE id = %s",
-        (user["id"],),
-    )
-    db_user = await cur.fetchone()
-
-    if not db_user or not db_user.get("github_token"):
+    if not user.get("github_token"):
         raise HTTPException(status_code=401, detail="GitHub não vinculado.")
 
-    name = body.repo_name.split("/")[-1]
+    repo_name = body.repo_name.strip()
 
-    await cur.execute(
-        """
-        INSERT INTO projects (owner_id, name, template, remote_provider, remote_repo)
-        VALUES (%s, %s, 'github', 'github', %s)
-        """,
-        (user["id"], name, body.repo_name),
-    )
+    if not _REPO_NAME_RE.match(repo_name) or "/" not in repo_name or ".." in repo_name:
+        raise HTTPException(status_code=400, detail="Repositório inválido (usa o formato dono/repositório).")
+
+    name = repo_name.split("/")[-1]
+
+    try:
+        await cur.execute(
+            """
+            INSERT INTO projects (owner_id, name, template, remote_provider, remote_repo)
+            VALUES (%s, %s, 'github', 'github', %s)
+            """,
+            (user["id"], name, repo_name),
+        )
+    except pymysql.err.IntegrityError:
+        raise HTTPException(status_code=409, detail="Já tens um projeto com esse nome.")
 
     await cur.execute("SELECT LAST_INSERT_ID() as id")
     project_id = (await cur.fetchone())["id"]
 
+    # Pasta limpa: um id reutilizado não pode herdar ficheiros antigos.
+    await asyncio.to_thread(shutil.rmtree, project_dir(project_id), True)
+
     try:
         await pull_from_remote(project_id, user, cur)
-
-        await cur.execute(
-            """
-            SELECT filename
-            FROM project_files
-            WHERE project_id = %s
-              AND filename LIKE %s
-            LIMIT 1
-            """,
-            (project_id, "%.tex"),
-        )
-        first_tex = await cur.fetchone()
-
-        if first_tex:
-            await cur.execute(
-                """
-                UPDATE project_files
-                SET is_main = 1
-                WHERE project_id = %s
-                  AND filename = %s
-                """,
-                (project_id, first_tex["filename"]),
-            )
-
         await cur.connection.commit()
 
     except Exception as e:
+        await cur.connection.rollback()
+
         await cur.execute(
             "DELETE FROM projects WHERE id = %s",
             (project_id,),
         )
-
         await cur.connection.commit()
+
+        await asyncio.to_thread(shutil.rmtree, project_dir(project_id), True)
+
+        detail = e.detail if isinstance(e, HTTPException) else str(e)
 
         raise HTTPException(
             status_code=400,
-            detail=f"Erro ao clonar repositório: {str(e)}",
+            detail=f"Erro ao clonar repositório: {detail}",
         )
 
     return {

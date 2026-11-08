@@ -24,3 +24,32 @@ pluginVS/aureatex-sync/*.vsix
 
 # Mac / SO
 .DS_Store
+
+# Segredos locais — nunca no git (o repositório é público)
+.env
+*.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+id_rsa*
+id_ed25519*
+*.secret
+secrets/
+# Ficheiros de compose com valores reais (o docker-compose.yml do repo só tem exemplos)
+docker-compose.override.yml
+compose.override.yml
+compose.prod.yml
+
+# Dumps e cópias de segurança (podem ter dados de utilizadores)
+*.sql
+*.sql.gz
+*.dump
+*.bak
+*_backups/
+
+# Ferramentas locais
+.claude/
+Thumbs.db

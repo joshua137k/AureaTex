@@ -1,90 +1,65 @@
-import base64
-import inspect
+import asyncio
 import io
-import mimetypes
 import os
 import re
+import shutil
 import zipfile
 
+import pymysql
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-import asyncio
-
-from core.config import BASE_PROJETOS_DIR
+from core.config import MAX_FILE_CHARS, MAX_ZIP_BYTES
 from core.database import get_db
+from core.paths import clean_filename, project_dir, safe_project_path
 from core.security import get_current_user
-
-from routers.collab import (
-    sync_doc_content,
-    notify_room,
-    rename_doc_in_room,
+from core.storage import (
+    ArchiveError,
+    content_to_bytes,
+    extract_zip,
+    read_project_tree,
+    remove_file,
+    write_file,
 )
 
-# Compatibilidade com o patch do pull.
-# Se ainda não tiveres adicionado is_project_reloading no collab.py,
-# o files.py continua a funcionar sem bloquear pulls.
-try:
-    from routers.collab import is_project_reloading
-except ImportError:
-    def is_project_reloading(project_id: int) -> bool:
-        return False
+from routers.collab import (
+    drop_doc,
+    flush_project,
+    is_project_reloading,
+    notify_room,
+    record_history,
+    rename_doc_in_room,
+    sync_doc_content,
+)
 
 
 router = APIRouter(prefix="/api/projects", tags=["files"])
+
+PROVIDERS = ("gitea", "github")
 
 
 # ---------------------------------------------------------------------------
 # Modelos
 # ---------------------------------------------------------------------------
 class FileUpdate(BaseModel):
-    content: str
-
-
-class FileCreate(BaseModel):
-    filename: str
-    content: str = ""
-    is_main: bool = False
+    content: str = Field(max_length=MAX_FILE_CHARS)
 
 
 class FileRename(BaseModel):
-    new_name: str
+    new_name: str = Field(max_length=255)
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-def _get_safe_path(project_id: int, filename: str) -> str:
-    """
-    Valida e devolve o caminho absoluto e seguro do ficheiro no disco.
-    """
-    if ".git/" in filename or filename == ".git":
-        raise HTTPException(status_code=400, detail="Acesso à pasta .git bloqueado.")
+def validate_project_name(name: str) -> str:
+    name = (name or "").strip()
 
-    safe_base = os.path.abspath(os.path.join(BASE_PROJETOS_DIR, str(project_id)))
-    clean_filename = filename.lstrip("/")
-    file_path = os.path.abspath(os.path.join(safe_base, clean_filename))
+    if not name or len(name) > 255 or re.search(r"[\x00-\x1f]", name):
+        raise HTTPException(status_code=400, detail="Nome de projeto inválido.")
 
-    if not file_path.startswith(safe_base):
-        raise HTTPException(status_code=400, detail="Tentativa de Path Traversal bloqueada.")
-
-    return file_path
-
-
-def _write_to_disk(file_path: str, content: str) -> None:
-    """
-    Escreve conteúdo (texto ou base64) no disco.
-    """
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    if content and content.startswith("data:") and ";base64," in content:
-        _, encoded = content.split(";base64,", 1)
-        with open(file_path, "wb") as f:
-            f.write(base64.b64decode(encoded))
-    else:
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(content)
+    return name
 
 
 async def _assert_project_owner(
@@ -97,48 +72,31 @@ async def _assert_project_owner(
     Valida se o utilizador tem acesso ao projeto e se tem permissão de edição
     (se exigido).
     """
-    if require_edit:
-        await cur.execute(
-            """
-            SELECT id
-            FROM projects
-            WHERE id = %s
-              AND (
-                    owner_id = %s
-                    OR EXISTS (
-                        SELECT 1
-                        FROM project_collaborators pc
-                        WHERE pc.project_id = %s
-                          AND pc.user_id = %s
-                          AND pc.role = 'editor'
-                    )
-              )
-            """,
-            (project_id, user_id, project_id, user_id),
-        )
-    else:
-        await cur.execute(
-            """
-            SELECT id
-            FROM projects
-            WHERE id = %s
-              AND (
-                    owner_id = %s
-                    OR EXISTS (
-                        SELECT 1
-                        FROM project_collaborators pc
-                        WHERE pc.project_id = %s
-                          AND pc.user_id = %s
-                    )
-              )
-            """,
-            (project_id, user_id, project_id, user_id),
-        )
+    role_filter = "AND pc.role = 'editor'" if require_edit else ""
+
+    await cur.execute(
+        f"""
+        SELECT id
+        FROM projects
+        WHERE id = %s
+          AND (
+                owner_id = %s
+                OR EXISTS (
+                    SELECT 1
+                    FROM project_collaborators pc
+                    WHERE pc.project_id = %s
+                      AND pc.user_id = %s
+                      {role_filter}
+                )
+          )
+        """,
+        (project_id, user_id, project_id, user_id),
+    )
 
     if not await cur.fetchone():
         raise HTTPException(
             status_code=403,
-            detail="Projeto não encontrado ou sem permissão de edição.",
+            detail="Projeto não encontrado ou sem permissão.",
         )
 
 
@@ -146,21 +104,15 @@ async def _assert_pull_not_running(project_id: int) -> None:
     """
     Impede alterações em ficheiros enquanto existe um pull/reload a correr.
     """
-    try:
-        reloading = is_project_reloading(project_id)
-
-        # Suporta tanto funções sync como async.
-        if inspect.isawaitable(reloading):
-            reloading = await reloading
-
-    except Exception:
-        reloading = False
-
-    if reloading:
+    if is_project_reloading(project_id):
         raise HTTPException(
             status_code=409,
             detail="Pull em curso. Aguarda a atualização do projeto.",
         )
+
+
+async def _touch_project(project_id: int, cur) -> None:
+    await cur.execute("UPDATE projects SET updated_at = NOW() WHERE id = %s", (project_id,))
 
 
 # ---------------------------------------------------------------------------
@@ -177,6 +129,9 @@ async def rename_file(
     await _assert_project_owner(project_id, user["id"], cur)
     await _assert_pull_not_running(project_id)
 
+    filename = clean_filename(filename)
+    new_name = clean_filename(body.new_name)
+
     await cur.execute(
         "SELECT id, is_main FROM project_files WHERE project_id = %s AND filename = %s",
         (project_id, filename),
@@ -186,11 +141,6 @@ async def rename_file(
     if not row:
         raise HTTPException(status_code=404, detail="Ficheiro não encontrado.")
 
-    new_name = body.new_name.strip()
-
-    if not new_name:
-        raise HTTPException(status_code=400, detail="Nome inválido.")
-
     if new_name == filename:
         return {
             "status": "unchanged",
@@ -198,8 +148,8 @@ async def rename_file(
             "new_name": new_name,
         }
 
-    old_path = _get_safe_path(project_id, filename)
-    new_path = _get_safe_path(project_id, new_name)
+    old_path = safe_project_path(project_id, filename)
+    new_path = safe_project_path(project_id, new_name)
 
     await cur.execute(
         "SELECT id FROM project_files WHERE project_id = %s AND filename = %s",
@@ -213,10 +163,15 @@ async def rename_file(
         "UPDATE project_files SET filename = %s WHERE project_id = %s AND filename = %s",
         (new_name, project_id, filename),
     )
+    await cur.execute(
+        "UPDATE project_file_history SET filename = %s WHERE project_id = %s AND filename = %s",
+        (new_name, project_id, filename),
+    )
+    await _touch_project(project_id, cur)
 
-    if os.path.exists(old_path):
-        os.makedirs(os.path.dirname(new_path) or ".", exist_ok=True)
-        os.rename(old_path, new_path)
+    if os.path.isfile(old_path):
+        os.makedirs(os.path.dirname(new_path), exist_ok=True)
+        os.replace(old_path, new_path)
 
     await rename_doc_in_room(project_id, filename, new_name)
 
@@ -245,6 +200,15 @@ async def save_file(
     await _assert_project_owner(project_id, user["id"], cur)
     await _assert_pull_not_running(project_id)
 
+    # Validar ANTES de tocar na BD ou no disco.
+    filename = clean_filename(filename)
+    safe_project_path(project_id, filename)
+
+    try:
+        content_to_bytes(body.content)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
     await cur.execute(
         "SELECT id FROM project_files WHERE project_id = %s AND filename = %s",
         (project_id, filename),
@@ -259,6 +223,10 @@ async def save_file(
         """,
         (project_id, filename, body.content),
     )
+    await record_history(cur, project_id, filename, body.content, user["id"])
+    await _touch_project(project_id, cur)
+
+    await asyncio.to_thread(write_file, project_id, filename, body.content)
 
     if not exists:
         notify_room(project_id, {
@@ -269,9 +237,8 @@ async def save_file(
             },
         })
 
-    file_path = _get_safe_path(project_id, filename)
-    await asyncio.to_thread(_write_to_disk, file_path, body.content)
-
+    # Quem tiver este ficheiro aberto no browser recebe o conteúdo novo, e a
+    # cópia em memória do collab deixa de poder sobrepor-se a este save.
     await sync_doc_content(project_id, filename, body.content)
 
     return {
@@ -290,14 +257,20 @@ async def set_main_file(
     await _assert_project_owner(project_id, user["id"], cur)
     await _assert_pull_not_running(project_id)
 
-    await cur.execute(
-        "UPDATE project_files SET is_main = 0 WHERE project_id = %s",
-        (project_id,),
-    )
+    filename = clean_filename(filename)
 
     await cur.execute(
-        "UPDATE project_files SET is_main = 1 WHERE project_id = %s AND filename = %s",
+        "SELECT id FROM project_files WHERE project_id = %s AND filename = %s",
         (project_id, filename),
+    )
+
+    # Antes, um nome inexistente deixava o projeto sem ficheiro principal.
+    if not await cur.fetchone():
+        raise HTTPException(status_code=404, detail="Ficheiro não encontrado.")
+
+    await cur.execute(
+        "UPDATE project_files SET is_main = (filename = %s) WHERE project_id = %s",
+        (filename, project_id),
     )
 
     notify_room(project_id, {
@@ -336,57 +309,21 @@ async def delete_file(
             detail="Não podes apagar o ficheiro principal (main.tex).",
         )
 
+    # Primeiro tira-se da memória do collab, para nenhum autosave o recriar.
+    await drop_doc(project_id, filename)
+
     await cur.execute(
         "DELETE FROM project_files WHERE project_id = %s AND filename = %s",
         (project_id, filename),
     )
+    await _touch_project(project_id, cur)
 
-    disk_path = _get_safe_path(project_id, filename)
-
-    if os.path.exists(disk_path):
-        os.remove(disk_path)
+    await asyncio.to_thread(remove_file, project_id, filename)
 
     notify_room(project_id, {
         "type": "file_deleted",
         "name": filename,
     })
-
-
-def _process_zip_sync(content: bytes, project_path: str):
-    results = []
-
-    with zipfile.ZipFile(io.BytesIO(content)) as z:
-        for member in z.infolist():
-            member_path = os.path.abspath(os.path.join(project_path, member.filename))
-
-            if not member_path.startswith(os.path.abspath(project_path)):
-                continue
-
-            z.extract(member, project_path)
-
-    for root_dir, _, files_in_dir in os.walk(project_path):
-        for filename in files_in_dir:
-            if filename.startswith(".") or "__MACOSX" in root_dir:
-                continue
-
-            filepath = os.path.join(root_dir, filename)
-            rel_path = os.path.relpath(filepath, project_path).replace("\\", "/")
-
-            try:
-                with open(filepath, "r", encoding="utf-8") as f:
-                    file_content = f.read()
-
-            except UnicodeDecodeError:
-                with open(filepath, "rb") as f:
-                    encoded = base64.b64encode(f.read()).decode("utf-8")
-
-                mime_type, _ = mimetypes.guess_type(filepath)
-                mime_type = mime_type or "application/octet-stream"
-                file_content = f"data:{mime_type};base64,{encoded}"
-
-            results.append((rel_path, file_content))
-
-    return results
 
 
 @router.get("/{project_id}/files")
@@ -467,6 +404,8 @@ async def restore_file_history(
     await _assert_project_owner(project_id, user["id"], cur)
     await _assert_pull_not_running(project_id)
 
+    filename = clean_filename(filename)
+
     await cur.execute(
         """
         SELECT content
@@ -481,7 +420,11 @@ async def restore_file_history(
     if not row:
         raise HTTPException(status_code=404, detail="Histórico não encontrado.")
 
-    content = row["content"]
+    content = row["content"] or ""
+
+    # Guarda primeiro o que ainda estiver só em memória, para a versão atual
+    # ficar no histórico antes de ser substituída.
+    await flush_project(project_id)
 
     await cur.execute(
         """
@@ -492,6 +435,14 @@ async def restore_file_history(
         (content, project_id, filename),
     )
 
+    if cur.rowcount == 0:
+        await cur.execute(
+            "SELECT id FROM project_files WHERE project_id = %s AND filename = %s",
+            (project_id, filename),
+        )
+        if not await cur.fetchone():
+            raise HTTPException(status_code=404, detail="Ficheiro não encontrado.")
+
     await cur.execute(
         """
         INSERT INTO project_file_history (project_id, filename, user_id, content, saved_at)
@@ -499,9 +450,9 @@ async def restore_file_history(
         """,
         (project_id, filename, user["id"], content),
     )
+    await _touch_project(project_id, cur)
 
-    file_path = _get_safe_path(project_id, filename)
-    await asyncio.to_thread(_write_to_disk, file_path, content)
+    await asyncio.to_thread(write_file, project_id, filename, content)
 
     await sync_doc_content(project_id, filename, content)
 
@@ -516,6 +467,9 @@ async def get_file(
     cur=Depends(get_db),
 ):
     await _assert_project_owner(project_id, user["id"], cur, require_edit=False)
+
+    # Inclui o que ainda só estiver na memória do collab (autosave pendente).
+    await flush_project(project_id)
 
     await cur.execute(
         "SELECT * FROM project_files WHERE project_id = %s AND filename = %s",
@@ -538,29 +492,50 @@ async def upload_zip_project(
     user=Depends(get_current_user),
     cur=Depends(get_db),
 ):
-    await cur.execute(
-        """
-        INSERT INTO projects (owner_id, name, template, remote_provider)
-        VALUES (%s, %s, 'zip', %s)
-        """,
-        (user["id"], name, remote_provider),
-    )
+    name = validate_project_name(name)
+
+    if remote_provider not in PROVIDERS:
+        remote_provider = "gitea"
+
+    content = await file.read(MAX_ZIP_BYTES + 1)
+
+    if len(content) > MAX_ZIP_BYTES:
+        raise HTTPException(status_code=413, detail="O ZIP é demasiado grande (máx. 50 MB).")
+
+    try:
+        await cur.execute(
+            """
+            INSERT INTO projects (owner_id, name, template, remote_provider)
+            VALUES (%s, %s, 'zip', %s)
+            """,
+            (user["id"], name, remote_provider),
+        )
+    except pymysql.err.IntegrityError:
+        raise HTTPException(status_code=409, detail="Já tens um projeto com esse nome.")
 
     await cur.execute("SELECT LAST_INSERT_ID() as id")
     project_id = (await cur.fetchone())["id"]
 
-    project_path = os.path.join(BASE_PROJETOS_DIR, str(project_id))
-    os.makedirs(project_path, exist_ok=True)
+    project_path = project_dir(project_id)
 
-    content = await file.read()
-    extracted_files = await asyncio.to_thread(_process_zip_sync, content, project_path)
+    try:
+        # Pasta nova e limpa — nunca reaproveitar restos de um projeto antigo.
+        await asyncio.to_thread(shutil.rmtree, project_path, True)
+        await asyncio.to_thread(extract_zip, content, project_path)
+        extracted_files = await asyncio.to_thread(read_project_tree, project_path)
 
-    main_tex_candidate = None
+        if not extracted_files:
+            raise ArchiveError("O ZIP não contém ficheiros utilizáveis.")
+
+    except ArchiveError as e:
+        await asyncio.to_thread(shutil.rmtree, project_path, True)
+        raise HTTPException(status_code=400, detail=str(e))
+
+    except Exception:
+        await asyncio.to_thread(shutil.rmtree, project_path, True)
+        raise
 
     for rel_path, file_content in extracted_files:
-        if rel_path.lower() in ["main.tex", "thesis.tex", "tese.tex"]:
-            main_tex_candidate = rel_path
-
         await cur.execute(
             """
             INSERT INTO project_files (project_id, filename, content, is_main)
@@ -569,28 +544,23 @@ async def upload_zip_project(
             (project_id, rel_path, file_content),
         )
 
-    if main_tex_candidate:
+    # Ficheiro principal: main/thesis/tese.tex mais perto da raiz; senão o
+    # primeiro .tex com \documentclass; senão o primeiro .tex.
+    tex_files = sorted(
+        (p for p, _ in extracted_files if p.lower().endswith(".tex")),
+        key=lambda p: (p.count("/"), p.lower()),
+    )
+    by_name = [p for p in tex_files if p.split("/")[-1].lower() in ("main.tex", "thesis.tex", "tese.tex")]
+    contents = dict(extracted_files)
+    with_class = [p for p in tex_files if "\\documentclass" in contents[p]]
+
+    main_candidate = (by_name or with_class or tex_files or [None])[0]
+
+    if main_candidate:
         await cur.execute(
             "UPDATE project_files SET is_main = 1 WHERE project_id = %s AND filename = %s",
-            (project_id, main_tex_candidate),
+            (project_id, main_candidate),
         )
-    else:
-        await cur.execute(
-            """
-            SELECT filename
-            FROM project_files
-            WHERE project_id = %s AND filename LIKE '%.tex'
-            LIMIT 1
-            """,
-            (project_id,),
-        )
-        first_tex = await cur.fetchone()
-
-        if first_tex:
-            await cur.execute(
-                "UPDATE project_files SET is_main = 1 WHERE project_id = %s AND filename = %s",
-                (project_id, first_tex["filename"]),
-            )
 
     return {
         "id": project_id,
@@ -606,6 +576,8 @@ async def download_project_zip(
 ):
     await _assert_project_owner(project_id, user["id"], cur, require_edit=False)
 
+    await flush_project(project_id)
+
     await cur.execute(
         "SELECT name FROM projects WHERE id = %s",
         (project_id,),
@@ -618,25 +590,25 @@ async def download_project_zip(
     )
     files = await cur.fetchall()
 
-    zip_buffer = io.BytesIO()
+    def build_zip() -> io.BytesIO:
+        zip_buffer = io.BytesIO()
 
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for f in files:
-            if f["content"] is None:
-                continue
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            for f in files:
+                if f["content"] is None:
+                    continue
 
-            content = f["content"]
+                try:
+                    zf.writestr(f["filename"], content_to_bytes(f["content"]))
+                except ValueError:
+                    continue
 
-            if content.startswith("data:") and ";base64," in content:
-                _, encoded = content.split(";base64,", 1)
-                data = base64.b64decode(encoded)
-                zf.writestr(f["filename"], data)
-            else:
-                zf.writestr(f["filename"], content.encode("utf-8"))
+        zip_buffer.seek(0)
+        return zip_buffer
 
-    zip_buffer.seek(0)
+    zip_buffer = await asyncio.to_thread(build_zip)
 
-    safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", project["name"])
+    safe_name = re.sub(r"[^a-zA-Z0-9_\-]", "_", project["name"]) or "project"
 
     return StreamingResponse(
         zip_buffer,

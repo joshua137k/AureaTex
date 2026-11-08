@@ -10,15 +10,16 @@ async function openShareModal() {
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
       body   : JSON.stringify({ role: 'editor' })
     });
+    if (res.status === 404 || res.status === 403) {
+      closeShareModal();
+      alert('Only the project owner can generate invite links.');
+      return;
+    }
+    if (!res.ok) throw new Error(await apiError(res, 'Error generating invite.'));
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Error generating invite.');
     input.value = data.url;
   } catch (e) {
-    input.value = 'No permission or network error.';
-    if (e.message.includes('No permission')) {
-      alert('Only the project owner can generate invite links.');
-      closeShareModal();
-    }
+    input.value = e.message || 'Network error.';
   }
 }
 
@@ -29,7 +30,11 @@ function closeShareModal() {
 function copyShareLink() {
   const input = document.getElementById('shareLinkInput');
   input.select();
-  document.execCommand('copy');
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(input.value).catch(() => document.execCommand('copy'));
+  } else {
+    document.execCommand('copy');
+  }
   const btn = document.querySelector('.modal-actions .btn-black');
   const old = btn.textContent;
   btn.textContent = 'Copied ✓';
